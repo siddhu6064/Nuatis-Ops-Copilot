@@ -9,6 +9,8 @@ from repositories.ops_alerts_repository import OpsAlertsRepository
 
 
 class OpsAlertsReadService:
+    ALLOWED_STATUSES = ("open", "resolved")
+
     def __init__(self, repository: OpsAlertsRepository) -> None:
         self._repository = repository
 
@@ -28,9 +30,12 @@ class OpsAlertsReadService:
 
         parsed_limit = self._parse_non_negative_int(limit, "limit", default=50)
         parsed_offset = self._parse_non_negative_int(offset, "offset", default=0)
+        normalized_status = self._normalize_optional(status)
 
         normalized_created_from = self._normalize_optional(created_from)
         normalized_created_to = self._normalize_optional(created_to)
+        if normalized_status is not None and normalized_status not in self.ALLOWED_STATUSES:
+            raise ValueError("status must be one of: open, resolved")
 
         if normalized_created_from is not None and not is_valid_iso8601(normalized_created_from):
             raise ValueError("created_from must be a valid ISO-8601 timestamp.")
@@ -41,7 +46,7 @@ class OpsAlertsReadService:
             tenant_id,
             limit=parsed_limit,
             offset=parsed_offset,
-            status=self._normalize_optional(status),
+            status=normalized_status,
             alert_type=self._normalize_optional(alert_type),
             created_from=normalized_created_from,
             created_to=normalized_created_to,
@@ -55,7 +60,7 @@ class OpsAlertsReadService:
                 "offset": parsed_offset,
             },
             "filters": {
-                "status": self._normalize_optional(status),
+                "status": normalized_status,
                 "alert_type": self._normalize_optional(alert_type),
                 "created_from": normalized_created_from,
                 "created_to": normalized_created_to,

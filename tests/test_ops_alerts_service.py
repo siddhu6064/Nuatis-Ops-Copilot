@@ -103,6 +103,15 @@ class OpsAlertsServiceTests(unittest.TestCase):
                 ops_alert_id="svc_alert_4",
                 resolved_at="2026-03-25T23:20:00Z",
             )
+        with self.assertRaises(ValueError):
+            self.service.create_ops_alert(
+                {
+                    "ops_alert_id": "svc_alert_bad_status",
+                    "tenant_id": "tenant_a",
+                    "alert_type": "booking_failure",
+                    "status": "closed",
+                }
+            )
 
     def test_dedup_prevents_second_open_alert_same_key(self) -> None:
         first = self.service.create_ops_alert(
@@ -206,13 +215,18 @@ class OpsAlertsServiceTests(unittest.TestCase):
             tenant_id="tenant_a",
             ops_alert_id="svc_alert_12",
             resolved_at="2026-03-26T00:20:00Z",
+            resolved_by="ops_user_1",
         )
         second = self.service.resolve_ops_alert(
             tenant_id="tenant_a",
             ops_alert_id="svc_alert_12",
             resolved_at="2026-03-26T00:21:00Z",
+            resolved_by="ops_user_2",
         )
 
         self.assertTrue(first)
         self.assertTrue(second)
-
+        stored = self.repo.get_alert_by_id("tenant_a", "svc_alert_12")
+        self.assertEqual(stored["status"], "resolved")
+        self.assertEqual(stored["resolved_at"], "2026-03-26T00:20:00Z")
+        self.assertEqual(stored["resolved_by"], "ops_user_1")

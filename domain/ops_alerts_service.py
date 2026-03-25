@@ -10,6 +10,7 @@ from repositories.ops_alerts_repository import OpsAlertsRepository
 
 
 class OpsAlertsService:
+    ALLOWED_STATUSES = ("open", "resolved")
     REQUIRED_CREATE_FIELDS = (
         "ops_alert_id",
         "tenant_id",
@@ -24,6 +25,8 @@ class OpsAlertsService:
         missing = [field for field in self.REQUIRED_CREATE_FIELDS if not alert_data.get(field)]
         if missing:
             raise ValueError(f"Missing required fields: {', '.join(missing)}")
+        if alert_data["status"] not in self.ALLOWED_STATUSES:
+            raise ValueError("status must be one of: open, resolved")
 
         dedup_candidate = self._find_dedup_candidate(alert_data)
         if dedup_candidate is not None:
@@ -70,6 +73,9 @@ class OpsAlertsService:
         )
 
     def _find_dedup_candidate(self, alert_data: dict[str, Any]) -> dict[str, Any] | None:
+        if alert_data.get("status") != "open":
+            return None
+
         if alert_data.get("alert_type") != "booking_failure_high_severity":
             return None
 

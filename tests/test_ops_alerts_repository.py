@@ -128,11 +128,36 @@ class OpsAlertsRepositoryTests(unittest.TestCase):
                     "status": "open",
                 }
             )
+        with self.assertRaises(ValueError):
+            self.repo.create_alert(
+                {
+                    "ops_alert_id": "alert_repo_7_bad_status",
+                    "tenant_id": "tenant_a",
+                    "alert_type": "booking_failure",
+                    "status": "closed",
+                }
+            )
 
         missing_row_result = self.repo.resolve_alert(
             "tenant_x", "does_not_exist", "2026-03-25T22:10:00Z"
         )
         self.assertFalse(missing_row_result)
+
+    def test_resolve_ignores_rows_with_invalid_status(self) -> None:
+        self.db.connection.execute(
+            """
+            INSERT INTO ops_alerts (
+                ops_alert_id, tenant_id, alert_type, status, created_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            ("alert_repo_invalid_status", "tenant_a", "booking_failure", "closed", "2026-03-25T22:12:00Z"),
+        )
+        self.db.connection.commit()
+
+        updated = self.repo.resolve_alert(
+            "tenant_a", "alert_repo_invalid_status", "2026-03-25T22:13:00Z"
+        )
+        self.assertFalse(updated)
 
     def test_find_open_alert_by_dedup_key(self) -> None:
         self.repo.create_alert(

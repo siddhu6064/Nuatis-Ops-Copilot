@@ -9,6 +9,7 @@ from db.connection import DatabaseConnection
 
 
 class OpsAlertsRepository:
+    ALLOWED_STATUSES = ("open", "resolved")
     REQUIRED_CREATE_FIELDS = (
         "ops_alert_id",
         "tenant_id",
@@ -24,6 +25,8 @@ class OpsAlertsRepository:
         missing = [field for field in self.REQUIRED_CREATE_FIELDS if not alert.get(field)]
         if missing:
             raise ValueError(f"Missing required fields: {', '.join(missing)}")
+        if alert["status"] not in self.ALLOWED_STATUSES:
+            raise ValueError("status must be one of: open, resolved")
 
         self._conn.execute(
             """
@@ -118,6 +121,8 @@ class OpsAlertsRepository:
         params: list[Any] = [tenant_id]
 
         if status is not None:
+            if status not in self.ALLOWED_STATUSES:
+                raise ValueError("status must be one of: open, resolved")
             query += " AND status = ?"
             params.append(status)
 
@@ -152,7 +157,7 @@ class OpsAlertsRepository:
             SET status = 'resolved',
                 resolved_at = COALESCE(resolved_at, ?),
                 resolved_by = COALESCE(resolved_by, ?)
-            WHERE tenant_id = ? AND ops_alert_id = ?
+            WHERE tenant_id = ? AND ops_alert_id = ? AND status IN ('open', 'resolved')
             """,
             (resolved_at, resolved_by, tenant_id, ops_alert_id),
         )

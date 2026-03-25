@@ -37,10 +37,16 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
 - Tenant scoping is mandatory for all alert reads and resolve operations.
 
 
-### Resolve semantics
-- Resolve is tenant-scoped and currently idempotent-by-update:
-  - resolving an already resolved alert returns success (`200`)
-  - `resolved_at` is updated to the latest provided/generated value
+### Lifecycle model and transition rules
+- Allowed alert statuses are explicit and constrained to:
+  - `open`
+  - `resolved`
+- Arbitrary statuses are rejected by service/repository validation.
+- Resolve transition is tenant-scoped and only allows:
+  - `open -> resolved`
+- Resolving a `resolved` alert is idempotent success (`200`) and does **not**
+  overwrite existing lifecycle metadata (`resolved_at`, `resolved_by`).
+- Resolving a non-existent alert returns `404`.
 
 ### Dedup behavior after resolution
 - Dedup only blocks when an **open** alert exists for the dedup key.

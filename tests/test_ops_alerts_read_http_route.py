@@ -191,6 +191,13 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
         self.assertFalse(response["success"])
         self.assertEqual(response["error"]["code"], "validation_error")
 
+    def test_invalid_status_filter_returns_400(self) -> None:
+        status, response = self.call_get("/internal/alerts", "tenant_id=tenant_a&status=closed")
+
+        self.assertTrue(status.startswith("400"))
+        self.assertFalse(response["success"])
+        self.assertEqual(response["error"]["code"], "validation_error")
+
     def test_status_filter_open_and_resolved_return_expected_rows(self) -> None:
         self.repo.create_alert(
             {

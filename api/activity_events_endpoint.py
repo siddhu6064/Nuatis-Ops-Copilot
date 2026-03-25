@@ -12,9 +12,6 @@ from domain.ops_alerts_service import OpsAlertsService
 from domain.timestamp_validation import is_valid_iso8601
 from repositories.activity_events_repository import ActivityEventsRepository
 from repositories.ops_alerts_repository import OpsAlertsRepository
-from workers.detectors.booking_failure_high_severity_detector import (
-    BookingFailureHighSeverityDetector,
-)
 
 
 ENDPOINT_PATH = "/internal/events/activity"
@@ -98,9 +95,7 @@ def ingest_activity_event(payload: dict[str, Any], db: DatabaseConnection) -> tu
             },
         )
 
-    orchestration = DetectorOrchestrationService(
-        BookingFailureHighSeverityDetector(OpsAlertsService(OpsAlertsRepository(db)))
-    )
+    orchestration = DetectorOrchestrationService(OpsAlertsService(OpsAlertsRepository(db)))
     detector_input = {**payload, "payload_json": normalized_payload_json}
     detector_summary = orchestration.evaluate_event(detector_input)
 

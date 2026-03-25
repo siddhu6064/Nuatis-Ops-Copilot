@@ -5,16 +5,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from domain.ops_alerts_service import OpsAlertsService
+from domain.detector_contracts import DetectorResult
 
 
 class BookingFailureHighSeverityDetector:
-    """Creates an ops alert for high-severity booking failures."""
+    """Returns a detector result for high-severity booking failures."""
 
-    def __init__(self, alerts_service: OpsAlertsService) -> None:
-        self._alerts_service = alerts_service
-
-    def evaluate_event(self, activity_event: dict[str, Any]) -> dict[str, Any]:
+    def evaluate(self, activity_event: dict[str, Any]) -> DetectorResult | None:
         required = ("activity_event_id", "tenant_id", "event_id", "event_type", "payload_json")
         missing = [field for field in required if not activity_event.get(field)]
         if missing:
@@ -29,31 +26,26 @@ class BookingFailureHighSeverityDetector:
         )
 
         if not is_match:
-            return {"result": "no_match"}
+            return None
 
-        source_event_id = payload_data.get("source_event_id") or activity_event["event_id"]
-        ops_alert_id = f"ops_alert_{activity_event['tenant_id']}_{source_event_id}"
-        create_result = self._alerts_service.create_ops_alert(
-            {
-                "ops_alert_id": ops_alert_id,
-                "tenant_id": activity_event["tenant_id"],
-                "source_activity_event_id": activity_event["activity_event_id"],
+        source_event_id = str(payload_data.get("source_event_id") or activity_event["event_id"])
+        severity = payload_data.get("severity")
+        if severity is not None:
+            severity = str(severity)
+
+        return DetectorResult(
+            alert_type="booking_failure_high_severity",
+            dedup_key=source_event_id,
+            payload={
+                "rule": "booking.failed + severity=high",
+                "event_type": activity_event["event_type"],
+            },
+            severity=severity,
+            metadata={
                 "source_event_id": source_event_id,
-                "alert_type": "booking_failure_high_severity",
-                "status": "open",
-                "details_json": json.dumps(
-                    {
-                        "rule": "booking.failed + severity=high",
-                        "event_type": activity_event["event_type"],
-                    }
-                ),
-            }
+                "payload_json": payload_data,
+            },
         )
-
-        if create_result["result"] == "deduped":
-            return {"result": "matched_deduped", "ops_alert_id": create_result["ops_alert_id"]}
-
-        return {"result": "matched_created", "ops_alert_id": create_result["ops_alert_id"]}
 
     @staticmethod
     def _normalize_payload(payload: Any) -> dict[str, Any]:

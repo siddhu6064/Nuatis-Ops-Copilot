@@ -2,12 +2,10 @@ import unittest
 from pathlib import Path
 
 from db.connection import connect, disconnect
+from domain.detector_contracts import DetectorResult
 from domain.detector_orchestration_service import DetectorOrchestrationService
 from domain.ops_alerts_service import OpsAlertsService
 from repositories.ops_alerts_repository import OpsAlertsRepository
-from workers.detectors.booking_failure_high_severity_detector import (
-    BookingFailureHighSeverityDetector,
-)
 
 
 MIGRATION_PATH = Path("db/migrations/0002_create_ops_alerts.sql")
@@ -21,8 +19,7 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
         self.db.connection.executescript(MIGRATION_0004_PATH.read_text())
         self.repo = OpsAlertsRepository(self.db)
         self.alert_service = OpsAlertsService(self.repo)
-        self.detector = BookingFailureHighSeverityDetector(self.alert_service)
-        self.orchestrator = DetectorOrchestrationService(self.detector)
+        self.orchestrator = DetectorOrchestrationService(self.alert_service)
 
     def tearDown(self) -> None:
         disconnect(self.db)
@@ -64,6 +61,28 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
         self.assertEqual(summary["alerts_created"], 0)
         self.assertEqual(summary["alerts_deduped"], 0)
         self.assertEqual(summary["results"][0]["result"], "no_match")
+
+    def test_detector_returning_none_creates_no_alert(self) -> None:
+        class NoopDetector:
+            def evaluate(self, event: dict) -> None:
+                return None
+
+        orchestrator = DetectorOrchestrationService(
+            self.alert_service,
+            detector_registry=[("noop_detector", NoopDetector())],
+        )
+        summary = orchestrator.evaluate_event(
+            {
+                "activity_event_id": "or_act_none",
+                "tenant_id": "tenant_a",
+                "event_id": "or_evt_none",
+                "event_type": "call.completed",
+                "payload_json": "{}",
+            }
+        )
+        self.assertEqual(summary["matches"], 0)
+        self.assertEqual(summary["alerts_created"], 0)
+        self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 0)
 
     def test_orchestration_preserves_tenant_scoped_behavior(self) -> None:
         alpha = self.orchestrator.evaluate_event(
@@ -131,3 +150,39 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
         self.assertEqual(second["alerts_created"], 0)
         self.assertEqual(second["alerts_deduped"], 1)
         self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 1)
+
+    def test_multiple_detectors_only_matching_detector_fires(self) -> None:
+        class NoopDetector:
+            def evaluate(self, event: dict) -> None:
+                return None
+
+        class MatchingDetector:
+            def evaluate(self, event: dict) -> DetectorResult:
+                return DetectorResult(
+                    alert_type="booking_failure_high_severity",
+                    dedup_key=event["event_id"],
+                    payload={"rule": "match-all"},
+                )
+
+        orchestrator = DetectorOrchestrationService(
+            self.alert_service,
+            detector_registry=[
+                ("noop_detector", NoopDetector()),
+                ("matching_detector", MatchingDetector()),
+            ],
+        )
+        summary = orchestrator.evaluate_event(
+            {
+                "activity_event_id": "or_act_multi",
+                "tenant_id": "tenant_multi",
+                "event_id": "evt_multi",
+                "event_type": "booking.failed",
+                "payload_json": "{}",
+            }
+        )
+
+        self.assertEqual(summary["detectors_run"], 2)
+        self.assertEqual(summary["matches"], 1)
+        self.assertEqual(summary["alerts_created"], 1)
+        self.assertEqual(summary["results"][0]["result"], "no_match")
+        self.assertEqual(summary["results"][1]["result"], "matched_created")

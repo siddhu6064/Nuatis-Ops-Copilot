@@ -54,12 +54,14 @@ def create_app(db: DatabaseConnection) -> Callable[[dict[str, Any], StartRespons
             raw_body = environ.get("wsgi.input", BytesIO()).read(body_length)
 
             resolved_at: str | None = None
+            resolved_by: str | None = None
             if raw_body:
                 try:
                     payload = json.loads(raw_body.decode("utf-8"))
                     if not isinstance(payload, dict):
                         raise ValueError("Payload must be a JSON object")
                     resolved_at = payload.get("resolved_at")
+                    resolved_by = payload.get("resolved_by")
                 except (json.JSONDecodeError, ValueError):
                     return _json_response(
                         400,
@@ -78,6 +80,7 @@ def create_app(db: DatabaseConnection) -> Callable[[dict[str, Any], StartRespons
                 ops_alert_id,
                 db,
                 resolved_at=resolved_at,
+                resolved_by=resolved_by,
             )
             return _json_response(status_code, response, start_response)
 

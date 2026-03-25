@@ -15,6 +15,7 @@ def resolve_ops_alert(
     db: DatabaseConnection,
     *,
     resolved_at: str | None = None,
+    resolved_by: str | None = None,
 ) -> tuple[int, dict[str, Any]]:
     service = OpsAlertsService(OpsAlertsRepository(db))
 
@@ -23,6 +24,7 @@ def resolve_ops_alert(
             tenant_id=tenant_id or "",
             ops_alert_id=ops_alert_id,
             resolved_at=resolved_at,
+            resolved_by=resolved_by,
         )
     except ValueError as exc:
         return (

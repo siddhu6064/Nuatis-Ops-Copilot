@@ -6,6 +6,7 @@ from pathlib import Path
 
 MIGRATION_PATH = Path("db/migrations/0002_create_ops_alerts.sql")
 INDEX_MIGRATION_PATH = Path("db/migrations/0003_add_ops_alerts_dedup_open_lookup_index.sql")
+RESOLVED_BY_MIGRATION_PATH = Path("db/migrations/0004_add_resolved_by_to_ops_alerts.sql")
 
 
 class OpsAlertsMigrationTests(unittest.TestCase):
@@ -24,6 +25,9 @@ class OpsAlertsMigrationTests(unittest.TestCase):
 
     def apply_index_migration(self) -> None:
         self.conn.executescript(INDEX_MIGRATION_PATH.read_text())
+
+    def apply_resolved_by_migration(self) -> None:
+        self.conn.executescript(RESOLVED_BY_MIGRATION_PATH.read_text())
 
     def test_migration_applies_successfully(self) -> None:
         self.apply_migration()
@@ -139,6 +143,16 @@ class OpsAlertsMigrationTests(unittest.TestCase):
 
         self.assertIsNotNone(row)
         self.assertEqual(row["name"], "idx_ops_alerts_open_dedup_lookup")
+
+
+    def test_resolved_by_migration_applies(self) -> None:
+        self.apply_migration()
+        self.apply_resolved_by_migration()
+
+        columns = self.conn.execute("PRAGMA table_info(ops_alerts)").fetchall()
+        column_names = [column[1] for column in columns]
+
+        self.assertIn("resolved_by", column_names)
 
 
 

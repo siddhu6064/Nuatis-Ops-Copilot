@@ -9,12 +9,14 @@ from repositories.ops_alerts_repository import OpsAlertsRepository
 
 
 MIGRATION_PATH = Path("db/migrations/0002_create_ops_alerts.sql")
+MIGRATION_0004_PATH = Path("db/migrations/0004_add_resolved_by_to_ops_alerts.sql")
 
 
 class OpsAlertsReadHttpRouteTests(unittest.TestCase):
     def setUp(self) -> None:
         self.db = connect("sqlite:///:memory:")
         self.db.connection.executescript(MIGRATION_PATH.read_text())
+        self.db.connection.executescript(MIGRATION_0004_PATH.read_text())
         self.repo = OpsAlertsRepository(self.db)
         self.app = create_app(self.db)
 
@@ -229,6 +231,28 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
         self.assertTrue(status.startswith("400"))
         self.assertFalse(response["success"])
         self.assertEqual(response["error"]["code"], "validation_error")
+
+
+    def test_read_path_returns_resolved_by_metadata_when_present(self) -> None:
+        self.repo.create_alert(
+            {
+                "ops_alert_id": "alert_11",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "resolved",
+                "resolved_at": "2026-03-26T01:10:00Z",
+                "resolved_by": "ops_user_1",
+            }
+        )
+
+        list_status, list_response = self.call_get("/internal/alerts", "tenant_id=tenant_a&status=resolved")
+        get_status, get_response = self.call_get("/internal/alerts/alert_11", "tenant_id=tenant_a")
+
+        self.assertTrue(list_status.startswith("200"))
+        self.assertEqual(list_response["data"]["alerts"][0]["resolved_by"], "ops_user_1")
+
+        self.assertTrue(get_status.startswith("200"))
+        self.assertEqual(get_response["data"]["resolved_by"], "ops_user_1")
 
 
 

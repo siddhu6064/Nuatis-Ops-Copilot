@@ -11,12 +11,14 @@ from workers.detectors.booking_failure_high_severity_detector import (
 
 
 MIGRATION_PATH = Path("db/migrations/0002_create_ops_alerts.sql")
+MIGRATION_0004_PATH = Path("db/migrations/0004_add_resolved_by_to_ops_alerts.sql")
 
 
 class DetectorOrchestrationServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.db = connect("sqlite:///:memory:")
         self.db.connection.executescript(MIGRATION_PATH.read_text())
+        self.db.connection.executescript(MIGRATION_0004_PATH.read_text())
         self.repo = OpsAlertsRepository(self.db)
         self.alert_service = OpsAlertsService(self.repo)
         self.detector = BookingFailureHighSeverityDetector(self.alert_service)

@@ -9,12 +9,14 @@ from repositories.ops_alerts_repository import OpsAlertsRepository
 
 
 MIGRATION_PATH = Path("db/migrations/0002_create_ops_alerts.sql")
+MIGRATION_0004_PATH = Path("db/migrations/0004_add_resolved_by_to_ops_alerts.sql")
 
 
 class OpsAlertsResolveHttpRouteTests(unittest.TestCase):
     def setUp(self) -> None:
         self.db = connect("sqlite:///:memory:")
         self.db.connection.executescript(MIGRATION_PATH.read_text())
+        self.db.connection.executescript(MIGRATION_0004_PATH.read_text())
         self.repo = OpsAlertsRepository(self.db)
         self.app = create_app(self.db)
 
@@ -110,4 +112,33 @@ class OpsAlertsResolveHttpRouteTests(unittest.TestCase):
         self.assertTrue(status.startswith("400"))
         self.assertFalse(response["success"])
         self.assertEqual(response["error"]["code"], "validation_error")
+
+    def test_resolve_with_resolved_by_and_repeat_preserves_original_metadata(self) -> None:
+        self.repo.create_alert(
+            {
+                "ops_alert_id": "resolve_5",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "open",
+            }
+        )
+
+        first_status, _ = self.call_post(
+            "/internal/alerts/resolve_5/resolve",
+            "tenant_id=tenant_a",
+            {"resolved_at": "2026-03-26T01:00:00Z", "resolved_by": "ops_user_1"},
+        )
+        second_status, _ = self.call_post(
+            "/internal/alerts/resolve_5/resolve",
+            "tenant_id=tenant_a",
+            {"resolved_at": "2026-03-26T01:05:00Z", "resolved_by": "ops_user_2"},
+        )
+
+        self.assertTrue(first_status.startswith("200"))
+        self.assertTrue(second_status.startswith("200"))
+
+        alert = self.repo.get_alert_by_id("tenant_a", "resolve_5")
+        self.assertEqual(alert["resolved_at"], "2026-03-26T01:00:00Z")
+        self.assertEqual(alert["resolved_by"], "ops_user_1")
+
 

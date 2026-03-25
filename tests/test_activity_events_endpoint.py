@@ -9,13 +9,14 @@ from repositories.ops_alerts_repository import OpsAlertsRepository
 
 ACTIVITY_EVENTS_MIGRATION_PATH = Path("db/migrations/0001_create_activity_events.sql")
 OPS_ALERTS_MIGRATION_PATH = Path("db/migrations/0002_create_ops_alerts.sql")
-
+OPS_ALERTS_MIGRATION_0004_PATH = Path("db/migrations/0004_add_resolved_by_to_ops_alerts.sql")
 
 class ActivityEventsEndpointTests(unittest.TestCase):
     def setUp(self) -> None:
         self.db = connect("sqlite:///:memory:")
         self.db.connection.executescript(ACTIVITY_EVENTS_MIGRATION_PATH.read_text())
         self.db.connection.executescript(OPS_ALERTS_MIGRATION_PATH.read_text())
+        self.db.connection.executescript(OPS_ALERTS_MIGRATION_0004_PATH.read_text())
         self.events_repo = ActivityEventsRepository(self.db)
         self.alerts_repo = OpsAlertsRepository(self.db)
 

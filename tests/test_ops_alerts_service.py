@@ -7,12 +7,14 @@ from repositories.ops_alerts_repository import OpsAlertsRepository
 
 
 MIGRATION_PATH = Path("db/migrations/0002_create_ops_alerts.sql")
+MIGRATION_0004_PATH = Path("db/migrations/0004_add_resolved_by_to_ops_alerts.sql")
 
 
 class OpsAlertsServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.db = connect("sqlite:///:memory:")
         self.db.connection.executescript(MIGRATION_PATH.read_text())
+        self.db.connection.executescript(MIGRATION_0004_PATH.read_text())
         self.repo = OpsAlertsRepository(self.db)
         self.service = OpsAlertsService(self.repo)
 

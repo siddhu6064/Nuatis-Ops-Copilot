@@ -48,6 +48,7 @@ class OpsAlertsService:
         tenant_id: str,
         ops_alert_id: str,
         resolved_at: str | None = None,
+        resolved_by: str | None = None,
     ) -> bool:
         if not tenant_id or not ops_alert_id:
             raise ValueError("tenant_id and ops_alert_id are required")
@@ -55,11 +56,17 @@ class OpsAlertsService:
         if resolved_at is not None and not is_valid_iso8601(resolved_at):
             raise ValueError("resolved_at must be a valid ISO-8601 timestamp.")
 
+        if resolved_by is not None and not isinstance(resolved_by, str):
+            raise ValueError("resolved_by must be a string when provided.")
+        if isinstance(resolved_by, str) and resolved_by.strip() == "":
+            raise ValueError("resolved_by must be a non-empty string when provided.")
+
         timestamp = resolved_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         return self._repository.resolve_alert(
             tenant_id=tenant_id,
             ops_alert_id=ops_alert_id,
             resolved_at=timestamp,
+            resolved_by=resolved_by,
         )
 
     def _find_dedup_candidate(self, alert_data: dict[str, Any]) -> dict[str, Any] | None:

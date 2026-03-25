@@ -35,8 +35,9 @@ class OpsAlertsRepository:
                 alert_type,
                 status,
                 details_json,
-                resolved_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                resolved_at,
+                resolved_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 alert["ops_alert_id"],
@@ -47,6 +48,7 @@ class OpsAlertsRepository:
                 alert["status"],
                 alert.get("details_json"),
                 alert.get("resolved_at"),
+                alert.get("resolved_by"),
             ),
         )
         self._conn.commit()
@@ -55,7 +57,7 @@ class OpsAlertsRepository:
         row = self._conn.execute(
             """
             SELECT ops_alert_id, tenant_id, source_activity_event_id, source_event_id,
-                   alert_type, status, details_json, created_at, resolved_at
+                   alert_type, status, details_json, created_at, resolved_at, resolved_by
             FROM ops_alerts
             WHERE tenant_id = ? AND ops_alert_id = ?
             """,
@@ -77,7 +79,7 @@ class OpsAlertsRepository:
         row = self._conn.execute(
             """
             SELECT ops_alert_id, tenant_id, source_activity_event_id, source_event_id,
-                   alert_type, status, details_json, created_at, resolved_at
+                   alert_type, status, details_json, created_at, resolved_at, resolved_by
             FROM ops_alerts
             WHERE tenant_id = ?
               AND alert_type = ?
@@ -108,7 +110,7 @@ class OpsAlertsRepository:
         query = (
             """
             SELECT ops_alert_id, tenant_id, source_activity_event_id, source_event_id,
-                   alert_type, status, details_json, created_at, resolved_at
+                   alert_type, status, details_json, created_at, resolved_at, resolved_by
             FROM ops_alerts
             WHERE tenant_id = ?
             """
@@ -137,14 +139,22 @@ class OpsAlertsRepository:
         rows = self._conn.execute(query, params).fetchall()
         return [dict(row) for row in rows]
 
-    def resolve_alert(self, tenant_id: str, ops_alert_id: str, resolved_at: str) -> bool:
+    def resolve_alert(
+        self,
+        tenant_id: str,
+        ops_alert_id: str,
+        resolved_at: str,
+        resolved_by: str | None = None,
+    ) -> bool:
         cursor = self._conn.execute(
             """
             UPDATE ops_alerts
-            SET status = ?, resolved_at = ?
+            SET status = 'resolved',
+                resolved_at = COALESCE(resolved_at, ?),
+                resolved_by = COALESCE(resolved_by, ?)
             WHERE tenant_id = ? AND ops_alert_id = ?
             """,
-            ("resolved", resolved_at, tenant_id, ops_alert_id),
+            (resolved_at, resolved_by, tenant_id, ops_alert_id),
         )
         self._conn.commit()
 

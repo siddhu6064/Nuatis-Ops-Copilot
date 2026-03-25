@@ -41,10 +41,10 @@ def ingest_activity_event(payload: dict[str, Any], db: DatabaseConnection) -> tu
             },
         )
 
-    events_repo = ActivityEventsRepository(db)
+    repo = ActivityEventsRepository(db)
 
     try:
-        events_repo.create_event(
+        repo.create_event(
             {
                 "activity_event_id": payload["activity_event_id"],
                 "tenant_id": payload["tenant_id"],

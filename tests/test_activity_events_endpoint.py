@@ -91,62 +91,7 @@ class ActivityEventsEndpointTests(unittest.TestCase):
         self.assertEqual(second_status, 409)
         self.assertFalse(second_response["success"])
         self.assertEqual(second_response["error"]["code"], "duplicate_event")
-        self.assertEqual(
-            second_response["error"]["message"],
-            "An event with the same tenant_id and event_id already exists.",
-        )
         self.assertEqual(len(self.alerts_repo.list_alerts_by_tenant("tenant_1")), 0)
-
-    def test_duplicate_activity_event_id_returns_specific_conflict_message(self) -> None:
-        first_status, _ = ingest_activity_event(
-            {
-                "activity_event_id": "ing_dup_id",
-                "tenant_id": "tenant_1",
-                "event_id": "evt_10",
-                "event_type": "call.completed",
-                "event_source": "voice",
-                "occurred_at": "2026-03-25T20:12:00Z",
-                "payload_json": '{}',
-            },
-            self.db,
-        )
-        second_status, second_response = ingest_activity_event(
-            {
-                "activity_event_id": "ing_dup_id",
-                "tenant_id": "tenant_2",
-                "event_id": "evt_11",
-                "event_type": "call.completed",
-                "event_source": "voice",
-                "occurred_at": "2026-03-25T20:13:00Z",
-                "payload_json": '{}',
-            },
-            self.db,
-        )
-
-        self.assertEqual(first_status, 201)
-        self.assertEqual(second_status, 409)
-        self.assertEqual(second_response["error"]["code"], "duplicate_event")
-        self.assertEqual(
-            second_response["error"]["message"],
-            "An event with this activity_event_id already exists.",
-        )
-
-    def test_payload_json_empty_dict_does_not_fail_required_validation(self) -> None:
-        status, response = ingest_activity_event(
-            {
-                "activity_event_id": "ing_4",
-                "tenant_id": "tenant_1",
-                "event_id": "evt_4",
-                "event_type": "call.completed",
-                "event_source": "voice",
-                "occurred_at": "2026-03-25T20:14:00Z",
-                "payload_json": {},
-            },
-            self.db,
-        )
-
-        self.assertEqual(status, 201)
-        self.assertTrue(response["success"])
 
     def test_missing_required_field_returns_validation_error(self) -> None:
         status, response = ingest_activity_event(

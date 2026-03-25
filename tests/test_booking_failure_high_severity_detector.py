@@ -34,7 +34,7 @@ class BookingFailureHighSeverityDetectorTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(result["result"], "matched")
+        self.assertEqual(result["result"], "matched_created")
         created = self.repo.get_alert_by_id("tenant_a", result["ops_alert_id"])
         self.assertIsNotNone(created)
         self.assertEqual(created["alert_type"], "booking_failure_high_severity")
@@ -92,7 +92,3 @@ class BookingFailureHighSeverityDetectorTests(unittest.TestCase):
                     "payload_json": '{"severity":"high"}',
                 }
             )
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -207,6 +207,40 @@ class ActivityEventsEndpointTests(unittest.TestCase):
         self.assertIsNotNone(beta_alert)
         self.assertIsNone(cross_tenant)
 
+    def test_detector_summary_reflects_deduped_match(self) -> None:
+        first_status, first_response = ingest_activity_event(
+            {
+                "activity_event_id": "ing_dedup_1",
+                "tenant_id": "tenant_1",
+                "event_id": "evt_unique_a",
+                "event_type": "booking.failed",
+                "event_source": "scheduler",
+                "occurred_at": "2026-03-25T20:30:00Z",
+                "payload_json": '{"severity":"high","source_event_id":"dedup_source"}',
+            },
+            self.db,
+        )
+        second_status, second_response = ingest_activity_event(
+            {
+                "activity_event_id": "ing_dedup_2",
+                "tenant_id": "tenant_1",
+                "event_id": "evt_unique_b",
+                "event_type": "booking.failed",
+                "event_source": "scheduler",
+                "occurred_at": "2026-03-25T20:31:00Z",
+                "payload_json": '{"severity":"high","source_event_id":"dedup_source"}',
+            },
+            self.db,
+        )
+
+        self.assertEqual(first_status, 201)
+        self.assertEqual(second_status, 201)
+        self.assertEqual(first_response["data"]["detector_summary"]["results"][0]["result"], "matched_created")
+        self.assertEqual(second_response["data"]["detector_summary"]["results"][0]["result"], "matched_deduped")
+        self.assertEqual(second_response["data"]["detector_summary"]["alerts_created"], 0)
+        self.assertEqual(second_response["data"]["detector_summary"]["alerts_deduped"], 1)
+
+
 
 if __name__ == "__main__":
     unittest.main()

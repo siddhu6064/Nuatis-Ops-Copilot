@@ -10,6 +10,7 @@ from wsgiref.simple_server import make_server
 
 from api.activity_events_endpoint import ENDPOINT_PATH, ingest_activity_event
 from api.ops_alerts_read_endpoint import get_ops_alert, list_ops_alerts
+from api.ops_alerts_resolve_endpoint import resolve_ops_alert
 from db.connection import DatabaseConnection, connect, disconnect
 
 
@@ -43,6 +44,41 @@ def create_app(db: DatabaseConnection) -> Callable[[dict[str, Any], StartRespons
             else:
                 status_code, response = ingest_activity_event(payload, db)
 
+            return _json_response(status_code, response, start_response)
+
+        if method == "POST" and path.startswith("/internal/alerts/") and path.endswith("/resolve"):
+            tenant_id = query_params.get("tenant_id", [None])[0]
+            ops_alert_id = path.split("/internal/alerts/", 1)[1].rsplit("/resolve", 1)[0]
+
+            body_length = int(environ.get("CONTENT_LENGTH") or 0)
+            raw_body = environ.get("wsgi.input", BytesIO()).read(body_length)
+
+            resolved_at: str | None = None
+            if raw_body:
+                try:
+                    payload = json.loads(raw_body.decode("utf-8"))
+                    if not isinstance(payload, dict):
+                        raise ValueError("Payload must be a JSON object")
+                    resolved_at = payload.get("resolved_at")
+                except (json.JSONDecodeError, ValueError):
+                    return _json_response(
+                        400,
+                        {
+                            "success": False,
+                            "error": {
+                                "code": "validation_error",
+                                "message": "Request body must be a valid JSON object.",
+                            },
+                        },
+                        start_response,
+                    )
+
+            status_code, response = resolve_ops_alert(
+                tenant_id,
+                ops_alert_id,
+                db,
+                resolved_at=resolved_at,
+            )
             return _json_response(status_code, response, start_response)
 
         if method == "GET" and path == "/internal/alerts":

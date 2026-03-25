@@ -39,7 +39,8 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
         self.assertEqual(summary["detectors_run"], 1)
         self.assertEqual(summary["matches"], 1)
         self.assertEqual(summary["alerts_created"], 1)
-        self.assertEqual(summary["results"][0]["result"], "matched")
+        self.assertEqual(summary["alerts_deduped"], 0)
+        self.assertEqual(summary["results"][0]["result"], "matched_created")
 
         alert_id = summary["results"][0]["ops_alert_id"]
         stored = self.repo.get_alert_by_id("tenant_a", alert_id)
@@ -59,6 +60,7 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
         self.assertEqual(summary["detectors_run"], 1)
         self.assertEqual(summary["matches"], 0)
         self.assertEqual(summary["alerts_created"], 0)
+        self.assertEqual(summary["alerts_deduped"], 0)
         self.assertEqual(summary["results"][0]["result"], "no_match")
 
     def test_orchestration_preserves_tenant_scoped_behavior(self) -> None:
@@ -102,6 +104,28 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
                 }
             )
 
+    def test_second_matching_event_is_deduped(self) -> None:
+        first = self.orchestrator.evaluate_event(
+            {
+                "activity_event_id": "or_act_6",
+                "tenant_id": "tenant_a",
+                "event_id": "same_evt",
+                "event_type": "booking.failed",
+                "payload_json": '{"severity":"high"}',
+            }
+        )
+        second = self.orchestrator.evaluate_event(
+            {
+                "activity_event_id": "or_act_7",
+                "tenant_id": "tenant_a",
+                "event_id": "same_evt",
+                "event_type": "booking.failed",
+                "payload_json": '{"severity":"high"}',
+            }
+        )
 
-if __name__ == "__main__":
-    unittest.main()
+        self.assertEqual(first["results"][0]["result"], "matched_created")
+        self.assertEqual(second["results"][0]["result"], "matched_deduped")
+        self.assertEqual(second["alerts_created"], 0)
+        self.assertEqual(second["alerts_deduped"], 1)
+        self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 1)

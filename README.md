@@ -14,20 +14,36 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
 - Current detector set includes:
   - `BookingFailureHighSeverityDetector`
     - Rule: match `event_type == "booking.failed"` and payload severity `"high"`.
-    - On match, creates one ops alert.
+    - On match, creates one ops alert or dedups against an existing open alert.
 
-### Alerts persistence and reads
+### Alerts persistence and lifecycle foundation
 - `ops_alerts` are persisted through repository/service layers.
-- Internal read endpoints:
+- Read endpoints:
   - `GET /internal/alerts?tenant_id=...`
   - `GET /internal/alerts/{ops_alert_id}?tenant_id=...`
+- Resolve endpoint:
+  - `POST /internal/alerts/{ops_alert_id}/resolve?tenant_id=...`
+  - optional JSON body: `{ "resolved_at": "..." }`
+  - if omitted, server-generated UTC timestamp is used.
 - Alert list supports:
   - `limit`, `offset`, `status`, `alert_type`, `created_from`, `created_to`
-- Tenant scoping is mandatory for all alert reads.
+- Tenant scoping is mandatory for all alert reads and resolve operations.
+
+### Dedup rule currently implemented
+For `booking_failure_high_severity` alerts only:
+- prevent duplicate **open** alerts when all match:
+  - `tenant_id`
+  - `alert_type`
+  - `source_event_id`
+- Detector result contract:
+  - `matched_created`
+  - `matched_deduped`
+  - `no_match`
 
 ## Database and migrations
 - `db/migrations/0001_create_activity_events.sql`
 - `db/migrations/0002_create_ops_alerts.sql`
+- `db/migrations/0003_add_ops_alerts_dedup_open_lookup_index.sql`
 
 Both schemas are tenant-scoped and designed for incremental lifecycle expansion.
 
@@ -42,9 +58,9 @@ Both schemas are tenant-scoped and designed for incremental lifecycle expansion.
 - Test suite is under `tests/` and covers:
   - migrations
   - repositories
-  - domain services
+  - domain services and lifecycle behavior
   - detectors and orchestration
-  - ingestion handler and HTTP routes
+  - ingestion/read/resolve HTTP routes
   - config/bootstrap modules
 
 Run:
@@ -53,8 +69,8 @@ Run:
 python -m unittest discover -s tests -v
 ```
 
-## Next planned lifecycle step (not implemented yet)
-- Alert resolve/dedup lifecycle hardening:
-  - define dedup key strategy (example: `tenant_id + alert_type + source_event_id`)
-  - add dedup window/rules at alert creation boundary
-  - keep dedup behavior explicit and tenant-scoped
+## Intentionally not implemented yet
+- notifications / outbound delivery
+- websocket streaming
+- dashboard/UI work
+- distributed dedup engine / cross-process locking

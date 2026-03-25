@@ -31,13 +31,14 @@ class BookingFailureHighSeverityDetector:
         if not is_match:
             return {"result": "no_match"}
 
-        ops_alert_id = f"ops_alert_{activity_event['tenant_id']}_{activity_event['event_id']}"
-        self._alerts_service.create_ops_alert(
+        source_event_id = payload_data.get("source_event_id") or activity_event["event_id"]
+        ops_alert_id = f"ops_alert_{activity_event['tenant_id']}_{source_event_id}"
+        create_result = self._alerts_service.create_ops_alert(
             {
                 "ops_alert_id": ops_alert_id,
                 "tenant_id": activity_event["tenant_id"],
                 "source_activity_event_id": activity_event["activity_event_id"],
-                "source_event_id": activity_event["event_id"],
+                "source_event_id": source_event_id,
                 "alert_type": "booking_failure_high_severity",
                 "status": "open",
                 "details_json": json.dumps(
@@ -49,7 +50,10 @@ class BookingFailureHighSeverityDetector:
             }
         )
 
-        return {"result": "matched", "ops_alert_id": ops_alert_id}
+        if create_result["result"] == "deduped":
+            return {"result": "matched_deduped", "ops_alert_id": create_result["ops_alert_id"]}
+
+        return {"result": "matched_created", "ops_alert_id": create_result["ops_alert_id"]}
 
     @staticmethod
     def _normalize_payload(payload: Any) -> dict[str, Any]:

@@ -22,19 +22,24 @@ class DetectorOrchestrationService:
         results: list[dict[str, Any]] = []
         matches = 0
         alerts_created = 0
+        alerts_deduped = 0
 
         for detector_name, detector in self._detectors:
             detector_result = detector.evaluate_event(activity_event)
+            result_type = detector_result.get("result", "no_match")
             result = {
                 "detector": detector_name,
-                "result": detector_result.get("result", "no_match"),
+                "result": result_type,
             }
             if detector_result.get("ops_alert_id"):
                 result["ops_alert_id"] = detector_result["ops_alert_id"]
 
-            if result["result"] == "matched":
+            if result_type in {"matched_created", "matched_deduped"}:
                 matches += 1
+            if result_type == "matched_created":
                 alerts_created += 1
+            if result_type == "matched_deduped":
+                alerts_deduped += 1
 
             results.append(result)
 
@@ -43,5 +48,6 @@ class DetectorOrchestrationService:
             "detectors_run": len(self._detectors),
             "matches": matches,
             "alerts_created": alerts_created,
+            "alerts_deduped": alerts_deduped,
             "results": results,
         }

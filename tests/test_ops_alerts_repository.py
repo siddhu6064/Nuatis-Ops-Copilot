@@ -132,6 +132,27 @@ class OpsAlertsRepositoryTests(unittest.TestCase):
         )
         self.assertFalse(missing_row_result)
 
+    def test_find_open_alert_by_dedup_key(self) -> None:
+        self.repo.create_alert(
+            {
+                "ops_alert_id": "alert_repo_d1",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_dup",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        found = self.repo.find_open_alert_by_dedup_key(
+            tenant_id="tenant_a",
+            alert_type="booking_failure_high_severity",
+            source_event_id="evt_dup",
+        )
+
+        self.assertIsNotNone(found)
+        self.assertEqual(found["ops_alert_id"], "alert_repo_d1")
+
+
 
 if __name__ == "__main__":
     unittest.main()

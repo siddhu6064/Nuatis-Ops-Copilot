@@ -5,7 +5,8 @@
 ├── api/
 │   ├── activity_events_endpoint.py
 │   ├── http_app.py
-│   └── ops_alerts_read_endpoint.py
+│   ├── ops_alerts_read_endpoint.py
+│   └── ops_alerts_resolve_endpoint.py
 ├── config/
 │   ├── env.py
 │   ├── logger.py
@@ -14,7 +15,8 @@
 │   ├── connection.py
 │   ├── migrations/
 │   │   ├── 0001_create_activity_events.sql
-│   │   └── 0002_create_ops_alerts.sql
+│   │   ├── 0002_create_ops_alerts.sql
+│   │   └── 0003_add_ops_alerts_dedup_open_lookup_index.sql
 │   └── models/
 ├── domain/
 │   ├── detector_orchestration_service.py
@@ -36,7 +38,7 @@
 
 - `api/`
   - HTTP-facing handlers and route-level request/response shaping.
-  - `http_app.py` provides minimal WSGI routing.
+  - `http_app.py` provides minimal WSGI routing for ingest/read/resolve.
 
 - `config/`
   - Environment loading, runtime settings, and logger setup.
@@ -46,10 +48,12 @@
 
 - `domain/`
   - Application services and orchestration logic.
-  - Read service (`ops_alerts_read_service.py`) owns alert read validation and filtering behavior.
+  - `ops_alerts_read_service.py` handles read validation/filtering.
+  - `ops_alerts_service.py` handles create/resolve and dedup-at-create foundation.
 
 - `repositories/`
   - Tenant-scoped persistence access for events and alerts.
+  - Explicit query methods for read filters and dedup lookup.
 
 - `workers/detectors/`
   - Rule evaluation modules (currently one hardcoded detector).

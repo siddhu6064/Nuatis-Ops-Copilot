@@ -67,6 +67,33 @@ class OpsAlertsRepository:
 
         return dict(row)
 
+    def find_open_alert_by_dedup_key(
+        self,
+        *,
+        tenant_id: str,
+        alert_type: str,
+        source_event_id: str,
+    ) -> dict[str, Any] | None:
+        row = self._conn.execute(
+            """
+            SELECT ops_alert_id, tenant_id, source_activity_event_id, source_event_id,
+                   alert_type, status, details_json, created_at, resolved_at
+            FROM ops_alerts
+            WHERE tenant_id = ?
+              AND alert_type = ?
+              AND source_event_id = ?
+              AND status = 'open'
+            ORDER BY created_at DESC, ops_alert_id DESC
+            LIMIT 1
+            """,
+            (tenant_id, alert_type, source_event_id),
+        ).fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)
+
     def list_alerts_by_tenant(
         self,
         tenant_id: str,

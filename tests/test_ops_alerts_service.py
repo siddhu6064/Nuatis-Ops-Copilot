@@ -30,6 +30,7 @@ class OpsAlertsServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(result["ops_alert_id"], "svc_alert_1")
+        self.assertEqual(result["result"], "created")
         stored = self.repo.get_alert_by_id("tenant_a", "svc_alert_1")
         self.assertIsNotNone(stored)
 
@@ -101,6 +102,61 @@ class OpsAlertsServiceTests(unittest.TestCase):
                 resolved_at="2026-03-25T23:20:00Z",
             )
 
+    def test_dedup_prevents_second_open_alert_same_key(self) -> None:
+        first = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_5",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_dup",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+        second = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_6",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_dup",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
 
-if __name__ == "__main__":
-    unittest.main()
+        self.assertEqual(first["result"], "created")
+        self.assertEqual(second["result"], "deduped")
+        self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 1)
+
+    def test_dedup_allows_different_tenant_and_source_event(self) -> None:
+        self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_7",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_same",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        diff_tenant = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_8",
+                "tenant_id": "tenant_b",
+                "source_event_id": "evt_same",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+        diff_source = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_9",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_other",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(diff_tenant["result"], "created")
+        self.assertEqual(diff_source["result"], "created")
+        self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 2)
+        self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_b")), 1)

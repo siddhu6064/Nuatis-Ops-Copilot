@@ -5,9 +5,11 @@ from __future__ import annotations
 from io import BytesIO
 import json
 from typing import Any, Callable
+from urllib.parse import parse_qs
 from wsgiref.simple_server import make_server
 
 from api.activity_events_endpoint import ENDPOINT_PATH, ingest_activity_event
+from api.ops_alerts_read_endpoint import get_ops_alert, list_ops_alerts
 from db.connection import DatabaseConnection, connect, disconnect
 
 
@@ -19,6 +21,7 @@ def create_app(db: DatabaseConnection) -> Callable[[dict[str, Any], StartRespons
     def app(environ: dict[str, Any], start_response: StartResponse) -> list[bytes]:
         method = environ.get("REQUEST_METHOD", "")
         path = environ.get("PATH_INFO", "")
+        query_params = parse_qs(environ.get("QUERY_STRING", ""))
 
         if method == "POST" and path == ENDPOINT_PATH:
             body_length = int(environ.get("CONTENT_LENGTH") or 0)
@@ -40,26 +43,21 @@ def create_app(db: DatabaseConnection) -> Callable[[dict[str, Any], StartRespons
             else:
                 status_code, response = ingest_activity_event(payload, db)
 
-            response_body = json.dumps(response).encode("utf-8")
-            start_response(
-                f"{status_code} { _reason_phrase(status_code) }",
-                [
-                    ("Content-Type", "application/json"),
-                    ("Content-Length", str(len(response_body))),
-                ],
-            )
-            return [response_body]
+            return _json_response(status_code, response, start_response)
+
+        if method == "GET" and path == "/internal/alerts":
+            tenant_id = query_params.get("tenant_id", [None])[0]
+            status_code, response = list_ops_alerts(tenant_id, db)
+            return _json_response(status_code, response, start_response)
+
+        if method == "GET" and path.startswith("/internal/alerts/"):
+            tenant_id = query_params.get("tenant_id", [None])[0]
+            ops_alert_id = path.split("/internal/alerts/", 1)[1]
+            status_code, response = get_ops_alert(tenant_id, ops_alert_id, db)
+            return _json_response(status_code, response, start_response)
 
         response = {"success": False, "error": {"code": "not_found", "message": "Route not found."}}
-        response_body = json.dumps(response).encode("utf-8")
-        start_response(
-            "404 Not Found",
-            [
-                ("Content-Type", "application/json"),
-                ("Content-Length", str(len(response_body))),
-            ],
-        )
-        return [response_body]
+        return _json_response(404, response, start_response)
 
     return app
 
@@ -75,9 +73,25 @@ def run_http_server(database_url: str, host: str = "0.0.0.0", port: int = 8080) 
         disconnect(db)
 
 
+def _json_response(
+    status_code: int, response: JsonDict, start_response: StartResponse
+) -> list[bytes]:
+    response_body = json.dumps(response).encode("utf-8")
+    start_response(
+        f"{status_code} {_reason_phrase(status_code)}",
+        [
+            ("Content-Type", "application/json"),
+            ("Content-Length", str(len(response_body))),
+        ],
+    )
+    return [response_body]
+
+
 def _reason_phrase(status_code: int) -> str:
     return {
+        200: "OK",
         201: "Created",
-        409: "Conflict",
         400: "Bad Request",
+        404: "Not Found",
+        409: "Conflict",
     }.get(status_code, "OK")

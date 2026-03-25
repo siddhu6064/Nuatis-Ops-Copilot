@@ -6,7 +6,13 @@ import sqlite3
 from typing import Any
 
 from db.connection import DatabaseConnection
+from domain.detector_orchestration_service import DetectorOrchestrationService
+from domain.ops_alerts_service import OpsAlertsService
 from repositories.activity_events_repository import ActivityEventsRepository
+from repositories.ops_alerts_repository import OpsAlertsRepository
+from workers.detectors.booking_failure_high_severity_detector import (
+    BookingFailureHighSeverityDetector,
+)
 
 
 ENDPOINT_PATH = "/internal/events/activity"
@@ -63,6 +69,11 @@ def ingest_activity_event(payload: dict[str, Any], db: DatabaseConnection) -> tu
             },
         )
 
+    orchestration = DetectorOrchestrationService(
+        BookingFailureHighSeverityDetector(OpsAlertsService(OpsAlertsRepository(db)))
+    )
+    detector_summary = orchestration.evaluate_event(payload)
+
     return (
         201,
         {
@@ -71,6 +82,7 @@ def ingest_activity_event(payload: dict[str, Any], db: DatabaseConnection) -> tu
                 "activity_event_id": payload["activity_event_id"],
                 "tenant_id": payload["tenant_id"],
                 "event_id": payload["event_id"],
+                "detector_summary": detector_summary,
             },
         },
     )

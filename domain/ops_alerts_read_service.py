@@ -1,0 +1,85 @@
+"""Read service for tenant-scoped ops alert queries."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from repositories.ops_alerts_repository import OpsAlertsRepository
+
+
+class OpsAlertsReadService:
+    def __init__(self, repository: OpsAlertsRepository) -> None:
+        self._repository = repository
+
+    def list_alerts(
+        self,
+        *,
+        tenant_id: str | None,
+        limit: str | int | None = None,
+        offset: str | int | None = None,
+        status: str | None = None,
+        alert_type: str | None = None,
+        created_from: str | None = None,
+        created_to: str | None = None,
+    ) -> dict[str, Any]:
+        if tenant_id is None or tenant_id == "":
+            raise ValueError("tenant_id is required.")
+
+        parsed_limit = self._parse_non_negative_int(limit, "limit", default=50)
+        parsed_offset = self._parse_non_negative_int(offset, "offset", default=0)
+
+        alerts = self._repository.list_alerts_by_tenant(
+            tenant_id,
+            limit=parsed_limit,
+            offset=parsed_offset,
+            status=self._normalize_optional(status),
+            alert_type=self._normalize_optional(alert_type),
+            created_from=self._normalize_optional(created_from),
+            created_to=self._normalize_optional(created_to),
+        )
+
+        return {
+            "tenant_id": tenant_id,
+            "alerts": alerts,
+            "pagination": {
+                "limit": parsed_limit,
+                "offset": parsed_offset,
+            },
+            "filters": {
+                "status": self._normalize_optional(status),
+                "alert_type": self._normalize_optional(alert_type),
+                "created_from": self._normalize_optional(created_from),
+                "created_to": self._normalize_optional(created_to),
+            },
+        }
+
+    def get_alert(self, *, tenant_id: str | None, ops_alert_id: str) -> dict[str, Any] | None:
+        if tenant_id is None or tenant_id == "":
+            raise ValueError("tenant_id is required.")
+
+        return self._repository.get_alert_by_id(tenant_id, ops_alert_id)
+
+    @staticmethod
+    def _normalize_optional(value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped if stripped != "" else None
+
+    @staticmethod
+    def _parse_non_negative_int(value: str | int | None, field: str, *, default: int) -> int:
+        if value is None or value == "":
+            return default
+
+        if isinstance(value, int):
+            parsed = value
+        else:
+            try:
+                parsed = int(value)
+            except ValueError as exc:
+                raise ValueError(f"{field} must be a non-negative integer.") from exc
+
+        if parsed < 0:
+            raise ValueError(f"{field} must be a non-negative integer.")
+
+        return parsed

@@ -153,6 +153,42 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
         self.assertTrue(cross_get_status.startswith("404"))
         self.assertFalse(cross_get_response["success"])
 
+    def test_list_alerts_filters_and_pagination(self) -> None:
+        self.repo.create_alert(
+            {
+                "ops_alert_id": "alert_7",
+                "tenant_id": "tenant_a",
+                "alert_type": "booking_failure",
+                "status": "open",
+            }
+        )
+        self.repo.create_alert(
+            {
+                "ops_alert_id": "alert_8",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "resolved",
+            }
+        )
+
+        status, response = self.call_get(
+            "/internal/alerts",
+            "tenant_id=tenant_a&status=open&alert_type=booking_failure&limit=1&offset=0",
+        )
+
+        self.assertTrue(status.startswith("200"))
+        self.assertEqual(len(response["data"]["alerts"]), 1)
+        self.assertEqual(response["data"]["alerts"][0]["ops_alert_id"], "alert_7")
+        self.assertEqual(response["data"]["pagination"]["limit"], 1)
+        self.assertEqual(response["data"]["pagination"]["offset"], 0)
+
+    def test_invalid_query_params_return_400(self) -> None:
+        status, response = self.call_get("/internal/alerts", "tenant_id=tenant_a&limit=bad")
+
+        self.assertTrue(status.startswith("400"))
+        self.assertFalse(response["success"])
+        self.assertEqual(response["error"]["code"], "validation_error")
+
 
 if __name__ == "__main__":
     unittest.main()

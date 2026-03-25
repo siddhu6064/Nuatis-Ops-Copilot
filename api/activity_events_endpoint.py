@@ -28,11 +28,10 @@ REQUIRED_FIELDS = (
 )
 
 
-def ingest_activity_event(
-    payload: dict[str, Any], db: DatabaseConnection
-) -> tuple[int, dict[str, Any]]:
+def ingest_activity_event(payload: dict[str, Any], db: DatabaseConnection) -> tuple[int, dict[str, Any]]:
     missing = [
-        field for field in REQUIRED_FIELDS
+        field
+        for field in REQUIRED_FIELDS
         if field not in payload or payload[field] is None
     ]
     if missing:
@@ -47,13 +46,11 @@ def ingest_activity_event(
             },
         )
 
-    payload_json_value = payload["payload_json"]
-    if isinstance(payload_json_value, (dict, list)):
-        normalized_payload_json = json.dumps(payload_json_value)
-    else:
-        normalized_payload_json = payload_json_value
-
     repo = ActivityEventsRepository(db)
+
+    normalized_payload_json = payload["payload_json"]
+    if isinstance(normalized_payload_json, (dict, list)):
+        normalized_payload_json = json.dumps(normalized_payload_json)
 
     try:
         repo.create_event(
@@ -70,20 +67,12 @@ def ingest_activity_event(
             }
         )
     except sqlite3.IntegrityError as exc:
-        error_message = str(exc)
-
-        if (
-            "activity_events.activity_event_id" in error_message
-            or "UNIQUE constraint failed: activity_events.activity_event_id" in error_message
-        ):
-            duplicate_message = "An event with the same activity_event_id already exists."
-        elif (
-            "activity_events.tenant_id, activity_events.event_id" in error_message
-            or "UNIQUE constraint failed: activity_events.tenant_id, activity_events.event_id" in error_message
-        ):
-            duplicate_message = "An event with the same tenant_id and event_id already exists."
-        else:
-            duplicate_message = "A duplicate activity event already exists."
+        error_message = "Duplicate activity event." 
+        raw_error = str(exc)
+        if "activity_events.activity_event_id" in raw_error:
+            error_message = "An event with this activity_event_id already exists."
+        elif "activity_events.tenant_id, activity_events.event_id" in raw_error:
+            error_message = "An event with the same tenant_id and event_id already exists."
 
         return (
             409,
@@ -91,18 +80,16 @@ def ingest_activity_event(
                 "success": False,
                 "error": {
                     "code": "duplicate_event",
-                    "message": duplicate_message,
+                    "message": error_message,
                 },
             },
         )
 
-    detector_payload = dict(payload)
-    detector_payload["payload_json"] = normalized_payload_json
-
     orchestration = DetectorOrchestrationService(
         BookingFailureHighSeverityDetector(OpsAlertsService(OpsAlertsRepository(db)))
     )
-    detector_summary = orchestration.evaluate_event(detector_payload)
+    detector_input = {**payload, "payload_json": normalized_payload_json}
+    detector_summary = orchestration.evaluate_event(detector_input)
 
     return (
         201,

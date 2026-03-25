@@ -67,18 +67,47 @@ class OpsAlertsRepository:
 
         return dict(row)
 
-    def list_alerts_by_tenant(self, tenant_id: str) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
+    def list_alerts_by_tenant(
+        self,
+        tenant_id: str,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        status: str | None = None,
+        alert_type: str | None = None,
+        created_from: str | None = None,
+        created_to: str | None = None,
+    ) -> list[dict[str, Any]]:
+        query = (
             """
             SELECT ops_alert_id, tenant_id, source_activity_event_id, source_event_id,
                    alert_type, status, details_json, created_at, resolved_at
             FROM ops_alerts
             WHERE tenant_id = ?
-            ORDER BY created_at DESC, ops_alert_id DESC
-            """,
-            (tenant_id,),
-        ).fetchall()
+            """
+        )
+        params: list[Any] = [tenant_id]
 
+        if status is not None:
+            query += " AND status = ?"
+            params.append(status)
+
+        if alert_type is not None:
+            query += " AND alert_type = ?"
+            params.append(alert_type)
+
+        if created_from is not None:
+            query += " AND created_at >= ?"
+            params.append(created_from)
+
+        if created_to is not None:
+            query += " AND created_at <= ?"
+            params.append(created_to)
+
+        query += " ORDER BY created_at DESC, ops_alert_id DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        rows = self._conn.execute(query, params).fetchall()
         return [dict(row) for row in rows]
 
     def resolve_alert(self, tenant_id: str, ops_alert_id: str, resolved_at: str) -> bool:

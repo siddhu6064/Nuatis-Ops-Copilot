@@ -47,7 +47,16 @@ def create_app(db: DatabaseConnection) -> Callable[[dict[str, Any], StartRespons
 
         if method == "GET" and path == "/internal/alerts":
             tenant_id = query_params.get("tenant_id", [None])[0]
-            status_code, response = list_ops_alerts(tenant_id, db)
+            status_code, response = list_ops_alerts(
+                tenant_id,
+                db,
+                limit=query_params.get("limit", [None])[0],
+                offset=query_params.get("offset", [None])[0],
+                status=query_params.get("status", [None])[0],
+                alert_type=query_params.get("alert_type", [None])[0],
+                created_from=query_params.get("created_from", [None])[0],
+                created_to=query_params.get("created_to", [None])[0],
+            )
             return _json_response(status_code, response, start_response)
 
         if method == "GET" and path.startswith("/internal/alerts/"):

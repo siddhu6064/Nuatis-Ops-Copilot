@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from domain.timestamp_validation import is_valid_iso8601
 from repositories.ops_alerts_repository import OpsAlertsRepository
 
 
@@ -28,14 +29,22 @@ class OpsAlertsReadService:
         parsed_limit = self._parse_non_negative_int(limit, "limit", default=50)
         parsed_offset = self._parse_non_negative_int(offset, "offset", default=0)
 
+        normalized_created_from = self._normalize_optional(created_from)
+        normalized_created_to = self._normalize_optional(created_to)
+
+        if normalized_created_from is not None and not is_valid_iso8601(normalized_created_from):
+            raise ValueError("created_from must be a valid ISO-8601 timestamp.")
+        if normalized_created_to is not None and not is_valid_iso8601(normalized_created_to):
+            raise ValueError("created_to must be a valid ISO-8601 timestamp.")
+
         alerts = self._repository.list_alerts_by_tenant(
             tenant_id,
             limit=parsed_limit,
             offset=parsed_offset,
             status=self._normalize_optional(status),
             alert_type=self._normalize_optional(alert_type),
-            created_from=self._normalize_optional(created_from),
-            created_to=self._normalize_optional(created_to),
+            created_from=normalized_created_from,
+            created_to=normalized_created_to,
         )
 
         return {
@@ -48,8 +57,8 @@ class OpsAlertsReadService:
             "filters": {
                 "status": self._normalize_optional(status),
                 "alert_type": self._normalize_optional(alert_type),
-                "created_from": self._normalize_optional(created_from),
-                "created_to": self._normalize_optional(created_to),
+                "created_from": normalized_created_from,
+                "created_to": normalized_created_to,
             },
         }
 

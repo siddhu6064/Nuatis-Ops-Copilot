@@ -16,6 +16,13 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
     - Rule: match `event_type == "booking.failed"` and payload severity `"high"`.
     - On match, creates one ops alert or dedups against an existing open alert.
 
+
+### Timestamp validation rules
+- `occurred_at` (ingestion) must be valid ISO-8601.
+- `created_from` / `created_to` (alert reads) must be valid ISO-8601 when provided.
+- `resolved_at` (resolve endpoint) must be valid ISO-8601 when provided.
+- Invalid timestamps return `400` with `validation_error`.
+
 ### Alerts persistence and lifecycle foundation
 - `ops_alerts` are persisted through repository/service layers.
 - Read endpoints:
@@ -28,6 +35,16 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
 - Alert list supports:
   - `limit`, `offset`, `status`, `alert_type`, `created_from`, `created_to`
 - Tenant scoping is mandatory for all alert reads and resolve operations.
+
+
+### Resolve semantics
+- Resolve is tenant-scoped and currently idempotent-by-update:
+  - resolving an already resolved alert returns success (`200`)
+  - `resolved_at` is updated to the latest provided/generated value
+
+### Dedup behavior after resolution
+- Dedup only blocks when an **open** alert exists for the dedup key.
+- After an alert is resolved, a new alert with the same dedup key can be created.
 
 ### Dedup rule currently implemented
 For `booking_failure_high_severity` alerts only:

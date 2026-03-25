@@ -68,3 +68,7 @@ class OpsAlertsReadServiceTests(unittest.TestCase):
     def test_missing_tenant_id_raises_validation_error(self) -> None:
         with self.assertRaises(ValueError):
             self.service.list_alerts(tenant_id=None)
+
+    def test_invalid_created_from_raises_validation_error(self) -> None:
+        with self.assertRaises(ValueError):
+            self.service.list_alerts(tenant_id="tenant_a", created_from="bad-time")

@@ -241,6 +241,24 @@ class ActivityEventsEndpointTests(unittest.TestCase):
         self.assertEqual(second_response["data"]["detector_summary"]["alerts_deduped"], 1)
 
 
+    def test_invalid_occurred_at_returns_validation_error(self) -> None:
+        status, response = ingest_activity_event(
+            {
+                "activity_event_id": "ing_bad_time",
+                "tenant_id": "tenant_1",
+                "event_id": "evt_bad_time",
+                "event_type": "call.completed",
+                "event_source": "voice",
+                "occurred_at": "not-a-timestamp",
+                "payload_json": "{}",
+            },
+            self.db,
+        )
+
+        self.assertEqual(status, 400)
+        self.assertEqual(response["error"]["code"], "validation_error")
+
+
 
 if __name__ == "__main__":
     unittest.main()

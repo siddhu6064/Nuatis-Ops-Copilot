@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from domain.timestamp_validation import is_valid_iso8601
 from repositories.ops_alerts_repository import OpsAlertsRepository
 
 
@@ -50,6 +51,9 @@ class OpsAlertsService:
     ) -> bool:
         if not tenant_id or not ops_alert_id:
             raise ValueError("tenant_id and ops_alert_id are required")
+
+        if resolved_at is not None and not is_valid_iso8601(resolved_at):
+            raise ValueError("resolved_at must be a valid ISO-8601 timestamp.")
 
         timestamp = resolved_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         return self._repository.resolve_alert(

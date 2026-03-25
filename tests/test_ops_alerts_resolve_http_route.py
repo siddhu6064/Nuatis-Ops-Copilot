@@ -90,3 +90,24 @@ class OpsAlertsResolveHttpRouteTests(unittest.TestCase):
         self.assertTrue(status.startswith("400"))
         self.assertFalse(response["success"])
         self.assertEqual(response["error"]["code"], "validation_error")
+
+    def test_invalid_resolved_at_returns_400(self) -> None:
+        self.repo.create_alert(
+            {
+                "ops_alert_id": "resolve_4",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "open",
+            }
+        )
+
+        status, response = self.call_post(
+            "/internal/alerts/resolve_4/resolve",
+            "tenant_id=tenant_a",
+            {"resolved_at": "bad-time"},
+        )
+
+        self.assertTrue(status.startswith("400"))
+        self.assertFalse(response["success"])
+        self.assertEqual(response["error"]["code"], "validation_error")
+

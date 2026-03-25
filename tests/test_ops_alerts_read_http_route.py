@@ -189,6 +189,48 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
         self.assertFalse(response["success"])
         self.assertEqual(response["error"]["code"], "validation_error")
 
+    def test_status_filter_open_and_resolved_return_expected_rows(self) -> None:
+        self.repo.create_alert(
+            {
+                "ops_alert_id": "alert_9",
+                "tenant_id": "tenant_a",
+                "alert_type": "booking_failure",
+                "status": "open",
+            }
+        )
+        self.repo.create_alert(
+            {
+                "ops_alert_id": "alert_10",
+                "tenant_id": "tenant_a",
+                "alert_type": "booking_failure",
+                "status": "resolved",
+            }
+        )
+
+        open_status, open_response = self.call_get("/internal/alerts", "tenant_id=tenant_a&status=open")
+        resolved_status, resolved_response = self.call_get(
+            "/internal/alerts", "tenant_id=tenant_a&status=resolved"
+        )
+
+        self.assertTrue(open_status.startswith("200"))
+        self.assertEqual(len(open_response["data"]["alerts"]), 1)
+        self.assertEqual(open_response["data"]["alerts"][0]["ops_alert_id"], "alert_9")
+
+        self.assertTrue(resolved_status.startswith("200"))
+        self.assertEqual(len(resolved_response["data"]["alerts"]), 1)
+        self.assertEqual(resolved_response["data"]["alerts"][0]["ops_alert_id"], "alert_10")
+
+
+    def test_invalid_created_from_returns_400(self) -> None:
+        status, response = self.call_get(
+            "/internal/alerts", "tenant_id=tenant_a&created_from=bad-time"
+        )
+
+        self.assertTrue(status.startswith("400"))
+        self.assertFalse(response["success"])
+        self.assertEqual(response["error"]["code"], "validation_error")
+
+
 
 if __name__ == "__main__":
     unittest.main()

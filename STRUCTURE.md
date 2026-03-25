@@ -21,7 +21,8 @@
 ├── domain/
 │   ├── detector_orchestration_service.py
 │   ├── ops_alerts_read_service.py
-│   └── ops_alerts_service.py
+│   ├── ops_alerts_service.py
+│   └── timestamp_validation.py
 ├── repositories/
 │   ├── activity_events_repository.py
 │   └── ops_alerts_repository.py
@@ -47,9 +48,10 @@
   - Connection bootstrap and SQL migrations.
 
 - `domain/`
-  - Application services and orchestration logic.
+  - Application services, orchestration, and validation helpers.
   - `ops_alerts_read_service.py` handles read validation/filtering.
   - `ops_alerts_service.py` handles create/resolve and dedup-at-create foundation.
+  - `timestamp_validation.py` provides lightweight ISO-8601 validation helpers.
 
 - `repositories/`
   - Tenant-scoped persistence access for events and alerts.

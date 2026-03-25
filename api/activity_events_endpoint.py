@@ -9,6 +9,7 @@ from typing import Any
 from db.connection import DatabaseConnection
 from domain.detector_orchestration_service import DetectorOrchestrationService
 from domain.ops_alerts_service import OpsAlertsService
+from domain.timestamp_validation import is_valid_iso8601
 from repositories.activity_events_repository import ActivityEventsRepository
 from repositories.ops_alerts_repository import OpsAlertsRepository
 from workers.detectors.booking_failure_high_severity_detector import (
@@ -42,6 +43,18 @@ def ingest_activity_event(payload: dict[str, Any], db: DatabaseConnection) -> tu
                 "error": {
                     "code": "validation_error",
                     "message": f"Missing required fields: {', '.join(missing)}",
+                },
+            },
+        )
+
+    if not is_valid_iso8601(payload["occurred_at"]):
+        return (
+            400,
+            {
+                "success": False,
+                "error": {
+                    "code": "validation_error",
+                    "message": "occurred_at must be a valid ISO-8601 timestamp.",
                 },
             },
         )

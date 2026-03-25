@@ -160,3 +160,57 @@ class OpsAlertsServiceTests(unittest.TestCase):
         self.assertEqual(diff_source["result"], "created")
         self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 2)
         self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_b")), 1)
+
+    def test_resolved_alert_does_not_block_new_alert_same_dedup_key(self) -> None:
+        self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_10",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_reopen",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+        self.service.resolve_ops_alert(
+            tenant_id="tenant_a",
+            ops_alert_id="svc_alert_10",
+            resolved_at="2026-03-26T00:10:00Z",
+        )
+
+        created_again = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_11",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_reopen",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(created_again["result"], "created")
+        self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 2)
+
+    def test_resolving_already_resolved_alert_is_idempotent_success(self) -> None:
+        self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_12",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "open",
+            }
+        )
+
+        first = self.service.resolve_ops_alert(
+            tenant_id="tenant_a",
+            ops_alert_id="svc_alert_12",
+            resolved_at="2026-03-26T00:20:00Z",
+        )
+        second = self.service.resolve_ops_alert(
+            tenant_id="tenant_a",
+            ops_alert_id="svc_alert_12",
+            resolved_at="2026-03-26T00:21:00Z",
+        )
+
+        self.assertTrue(first)
+        self.assertTrue(second)
+

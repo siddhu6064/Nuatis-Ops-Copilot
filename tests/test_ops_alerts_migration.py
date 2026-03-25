@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 MIGRATION_PATH = Path("db/migrations/0002_create_ops_alerts.sql")
+INDEX_MIGRATION_PATH = Path("db/migrations/0003_add_ops_alerts_dedup_open_lookup_index.sql")
 
 
 class OpsAlertsMigrationTests(unittest.TestCase):
@@ -20,6 +21,9 @@ class OpsAlertsMigrationTests(unittest.TestCase):
 
     def apply_migration(self) -> None:
         self.conn.executescript(MIGRATION_PATH.read_text())
+
+    def apply_index_migration(self) -> None:
+        self.conn.executescript(INDEX_MIGRATION_PATH.read_text())
 
     def test_migration_applies_successfully(self) -> None:
         self.apply_migration()
@@ -124,6 +128,18 @@ class OpsAlertsMigrationTests(unittest.TestCase):
 
         self.assertEqual(len(tenant_alpha_rows), 1)
         self.assertEqual(tenant_alpha_rows[0]["ops_alert_id"], "alert_3")
+
+    def test_dedup_index_migration_applies(self) -> None:
+        self.apply_migration()
+        self.apply_index_migration()
+
+        row = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_ops_alerts_open_dedup_lookup'"
+        ).fetchone()
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["name"], "idx_ops_alerts_open_dedup_lookup")
+
 
 
 if __name__ == "__main__":

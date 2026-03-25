@@ -4,66 +4,64 @@ from __future__ import annotations
 
 from typing import Any
 
+from domain.alert_query_params import AlertQueryParams
 from domain.timestamp_validation import is_valid_iso8601
 from repositories.ops_alerts_repository import OpsAlertsRepository
 
 
 class OpsAlertsReadService:
     ALLOWED_STATUSES = ("open", "resolved")
+    ALLOWED_SORT_ORDERS = ("asc", "desc")
+    DEFAULT_LIMIT = 50
+    MAX_LIMIT = 200
 
     def __init__(self, repository: OpsAlertsRepository) -> None:
         self._repository = repository
 
     def list_alerts(
         self,
-        *,
-        tenant_id: str | None,
-        limit: str | int | None = None,
-        offset: str | int | None = None,
-        status: str | None = None,
-        alert_type: str | None = None,
-        created_from: str | None = None,
-        created_to: str | None = None,
+        params: AlertQueryParams,
     ) -> dict[str, Any]:
-        if tenant_id is None or tenant_id == "":
+        if params.tenant_id == "":
             raise ValueError("tenant_id is required.")
 
-        parsed_limit = self._parse_non_negative_int(limit, "limit", default=50)
-        parsed_offset = self._parse_non_negative_int(offset, "offset", default=0)
-        normalized_status = self._normalize_optional(status)
+        normalized_status = self._normalize_optional(params.status)
+        normalized_created_after = self._normalize_optional(params.created_after)
+        normalized_created_before = self._normalize_optional(params.created_before)
+        normalized_sort_order = self._normalize_sort_order(params.sort_order)
+        normalized_limit = self._normalize_limit(params.limit)
+        normalized_offset = self._parse_non_negative_int(params.offset, "offset", default=0)
 
-        normalized_created_from = self._normalize_optional(created_from)
-        normalized_created_to = self._normalize_optional(created_to)
         if normalized_status is not None and normalized_status not in self.ALLOWED_STATUSES:
             raise ValueError("status must be one of: open, resolved")
 
-        if normalized_created_from is not None and not is_valid_iso8601(normalized_created_from):
-            raise ValueError("created_from must be a valid ISO-8601 timestamp.")
-        if normalized_created_to is not None and not is_valid_iso8601(normalized_created_to):
-            raise ValueError("created_to must be a valid ISO-8601 timestamp.")
+        if normalized_created_after is not None and not is_valid_iso8601(normalized_created_after):
+            raise ValueError("created_after must be a valid ISO-8601 timestamp.")
+        if normalized_created_before is not None and not is_valid_iso8601(normalized_created_before):
+            raise ValueError("created_before must be a valid ISO-8601 timestamp.")
 
         alerts = self._repository.list_alerts_by_tenant(
-            tenant_id,
-            limit=parsed_limit,
-            offset=parsed_offset,
+            params.tenant_id,
+            limit=normalized_limit,
+            offset=normalized_offset,
             status=normalized_status,
-            alert_type=self._normalize_optional(alert_type),
-            created_from=normalized_created_from,
-            created_to=normalized_created_to,
+            created_after=normalized_created_after,
+            created_before=normalized_created_before,
+            sort_order=normalized_sort_order,
         )
 
         return {
-            "tenant_id": tenant_id,
+            "tenant_id": params.tenant_id,
             "alerts": alerts,
             "pagination": {
-                "limit": parsed_limit,
-                "offset": parsed_offset,
+                "limit": normalized_limit,
+                "offset": normalized_offset,
             },
             "filters": {
                 "status": normalized_status,
-                "alert_type": self._normalize_optional(alert_type),
-                "created_from": normalized_created_from,
-                "created_to": normalized_created_to,
+                "created_after": normalized_created_after,
+                "created_before": normalized_created_before,
+                "sort_order": normalized_sort_order,
             },
         }
 
@@ -97,3 +95,13 @@ class OpsAlertsReadService:
             raise ValueError(f"{field} must be a non-negative integer.")
 
         return parsed
+
+    def _normalize_limit(self, value: str | int | None) -> int:
+        parsed = self._parse_non_negative_int(value, "limit", default=self.DEFAULT_LIMIT)
+        return min(parsed, self.MAX_LIMIT)
+
+    def _normalize_sort_order(self, value: str | None) -> str:
+        normalized = self._normalize_optional(value) or "desc"
+        if normalized not in self.ALLOWED_SORT_ORDERS:
+            raise ValueError("sort_order must be one of: asc, desc")
+        return normalized

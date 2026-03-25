@@ -33,7 +33,9 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
   - optional JSON body: `{ "resolved_at": "..." }`
   - if omitted, server-generated UTC timestamp is used.
 - Alert list supports:
-  - `limit`, `offset`, `status`, `alert_type`, `created_from`, `created_to`
+  - `limit`, `offset`, `status`, `created_after`, `created_before`, `sort_order`
+  - `sort_order` accepts `asc` or `desc` (default `desc`)
+  - `limit` defaults to `50` and is capped at `200`
 - Tenant scoping is mandatory for all alert reads and resolve operations.
 
 

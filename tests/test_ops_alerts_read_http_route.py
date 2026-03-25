@@ -175,7 +175,7 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
 
         status, response = self.call_get(
             "/internal/alerts",
-            "tenant_id=tenant_a&status=open&alert_type=booking_failure&limit=1&offset=0",
+            "tenant_id=tenant_a&status=open&limit=1&offset=0",
         )
 
         self.assertTrue(status.startswith("200"))
@@ -197,6 +197,19 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
         self.assertTrue(status.startswith("400"))
         self.assertFalse(response["success"])
         self.assertEqual(response["error"]["code"], "validation_error")
+
+    def test_invalid_sort_order_returns_400(self) -> None:
+        status, response = self.call_get("/internal/alerts", "tenant_id=tenant_a&sort_order=newest")
+
+        self.assertTrue(status.startswith("400"))
+        self.assertFalse(response["success"])
+        self.assertEqual(response["error"]["code"], "validation_error")
+
+    def test_limit_is_capped_to_200(self) -> None:
+        status, response = self.call_get("/internal/alerts", "tenant_id=tenant_a&limit=999")
+
+        self.assertTrue(status.startswith("200"))
+        self.assertEqual(response["data"]["pagination"]["limit"], 200)
 
     def test_status_filter_open_and_resolved_return_expected_rows(self) -> None:
         self.repo.create_alert(
@@ -230,14 +243,46 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
         self.assertEqual(resolved_response["data"]["alerts"][0]["ops_alert_id"], "alert_10")
 
 
-    def test_invalid_created_from_returns_400(self) -> None:
+    def test_invalid_created_after_returns_400(self) -> None:
         status, response = self.call_get(
-            "/internal/alerts", "tenant_id=tenant_a&created_from=bad-time"
+            "/internal/alerts", "tenant_id=tenant_a&created_after=bad-time"
         )
 
         self.assertTrue(status.startswith("400"))
         self.assertFalse(response["success"])
         self.assertEqual(response["error"]["code"], "validation_error")
+
+    def test_deterministic_ordering_uses_ops_alert_id_tie_breaker(self) -> None:
+        self.db.connection.execute(
+            """
+            INSERT INTO ops_alerts (
+                ops_alert_id, tenant_id, alert_type, status, created_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            ("alert_a", "tenant_a", "workflow_failure", "open", "2026-03-26T10:00:00Z"),
+        )
+        self.db.connection.execute(
+            """
+            INSERT INTO ops_alerts (
+                ops_alert_id, tenant_id, alert_type, status, created_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            ("alert_b", "tenant_a", "workflow_failure", "open", "2026-03-26T10:00:00Z"),
+        )
+        self.db.connection.commit()
+
+        desc_status, desc_response = self.call_get(
+            "/internal/alerts", "tenant_id=tenant_a&sort_order=desc"
+        )
+        asc_status, asc_response = self.call_get("/internal/alerts", "tenant_id=tenant_a&sort_order=asc")
+
+        self.assertTrue(desc_status.startswith("200"))
+        self.assertEqual(desc_response["data"]["alerts"][0]["ops_alert_id"], "alert_b")
+        self.assertEqual(desc_response["data"]["alerts"][1]["ops_alert_id"], "alert_a")
+
+        self.assertTrue(asc_status.startswith("200"))
+        self.assertEqual(asc_response["data"]["alerts"][0]["ops_alert_id"], "alert_a")
+        self.assertEqual(asc_response["data"]["alerts"][1]["ops_alert_id"], "alert_b")
 
 
     def test_read_path_returns_resolved_by_metadata_when_present(self) -> None:

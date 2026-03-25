@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from db.connection import DatabaseConnection
+from domain.alert_query_params import AlertQueryParams
 from domain.ops_alerts_read_service import OpsAlertsReadService
 from repositories.ops_alerts_repository import OpsAlertsRepository
 
@@ -16,22 +17,23 @@ def list_ops_alerts(
     limit: str | int | None = None,
     offset: str | int | None = None,
     status: str | None = None,
-    alert_type: str | None = None,
-    created_from: str | None = None,
-    created_to: str | None = None,
+    created_after: str | None = None,
+    created_before: str | None = None,
+    sort_order: str | None = None,
 ) -> tuple[int, dict[str, Any]]:
     service = OpsAlertsReadService(OpsAlertsRepository(db))
 
     try:
-        data = service.list_alerts(
-            tenant_id=tenant_id,
+        params = AlertQueryParams(
+            tenant_id=tenant_id or "",
+            status=status,
+            created_after=created_after,
+            created_before=created_before,
             limit=limit,
             offset=offset,
-            status=status,
-            alert_type=alert_type,
-            created_from=created_from,
-            created_to=created_to,
+            sort_order=sort_order or "desc",
         )
+        data = service.list_alerts(params)
     except ValueError as exc:
         return (
             400,

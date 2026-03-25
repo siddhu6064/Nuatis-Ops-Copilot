@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 
 from db.connection import connect, disconnect
+from domain.alert_query_params import AlertQueryParams
 from domain.ops_alerts_read_service import OpsAlertsReadService
 from repositories.ops_alerts_repository import OpsAlertsRepository
 
@@ -40,7 +41,7 @@ class OpsAlertsReadServiceTests(unittest.TestCase):
         )
 
         result = self.service.list_alerts(
-            tenant_id="tenant_a", status="open", limit="10", offset="0"
+            AlertQueryParams(tenant_id="tenant_a", status="open", limit="10", offset="0")
         )
 
         self.assertEqual(result["tenant_id"], "tenant_a")
@@ -65,16 +66,24 @@ class OpsAlertsReadServiceTests(unittest.TestCase):
 
     def test_invalid_limit_raises_validation_error(self) -> None:
         with self.assertRaises(ValueError):
-            self.service.list_alerts(tenant_id="tenant_a", limit="bad")
+            self.service.list_alerts(AlertQueryParams(tenant_id="tenant_a", limit="bad"))
 
     def test_missing_tenant_id_raises_validation_error(self) -> None:
         with self.assertRaises(ValueError):
-            self.service.list_alerts(tenant_id=None)
+            self.service.list_alerts(AlertQueryParams(tenant_id=""))
 
-    def test_invalid_created_from_raises_validation_error(self) -> None:
+    def test_invalid_created_after_raises_validation_error(self) -> None:
         with self.assertRaises(ValueError):
-            self.service.list_alerts(tenant_id="tenant_a", created_from="bad-time")
+            self.service.list_alerts(AlertQueryParams(tenant_id="tenant_a", created_after="bad-time"))
 
     def test_invalid_status_filter_raises_validation_error(self) -> None:
         with self.assertRaises(ValueError):
-            self.service.list_alerts(tenant_id="tenant_a", status="closed")
+            self.service.list_alerts(AlertQueryParams(tenant_id="tenant_a", status="closed"))
+
+    def test_invalid_sort_order_raises_validation_error(self) -> None:
+        with self.assertRaises(ValueError):
+            self.service.list_alerts(AlertQueryParams(tenant_id="tenant_a", sort_order="newest"))
+
+    def test_limit_is_capped_to_200(self) -> None:
+        result = self.service.list_alerts(AlertQueryParams(tenant_id="tenant_a", limit="999"))
+        self.assertEqual(result["pagination"]["limit"], 200)

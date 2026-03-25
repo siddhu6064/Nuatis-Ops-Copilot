@@ -106,9 +106,9 @@ class OpsAlertsRepository:
         limit: int = 50,
         offset: int = 0,
         status: str | None = None,
-        alert_type: str | None = None,
-        created_from: str | None = None,
-        created_to: str | None = None,
+        created_after: str | None = None,
+        created_before: str | None = None,
+        sort_order: str = "desc",
     ) -> list[dict[str, Any]]:
         query = (
             """
@@ -126,19 +126,19 @@ class OpsAlertsRepository:
             query += " AND status = ?"
             params.append(status)
 
-        if alert_type is not None:
-            query += " AND alert_type = ?"
-            params.append(alert_type)
-
-        if created_from is not None:
+        if created_after is not None:
             query += " AND created_at >= ?"
-            params.append(created_from)
+            params.append(created_after)
 
-        if created_to is not None:
+        if created_before is not None:
             query += " AND created_at <= ?"
-            params.append(created_to)
+            params.append(created_before)
 
-        query += " ORDER BY created_at DESC, ops_alert_id DESC LIMIT ? OFFSET ?"
+        if sort_order == "asc":
+            query += " ORDER BY created_at ASC, ops_alert_id ASC"
+        else:
+            query += " ORDER BY created_at DESC, ops_alert_id DESC"
+        query += " LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
         rows = self._conn.execute(query, params).fetchall()

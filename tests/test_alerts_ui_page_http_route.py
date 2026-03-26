@@ -41,9 +41,13 @@ class AlertsUiPageHttpRouteTests(unittest.TestCase):
 
         self.assertTrue(str(captured["status"]).startswith("200"))
         self.assertIn("Ops Alerts", response_text)
-        self.assertIn("/internal/alerts?tenant_id=", response_text)
+        self.assertIn("new URLSearchParams({ tenant_id: tenantId })", response_text)
+        self.assertIn("id=\"status_filter\"", response_text)
+        self.assertIn("id=\"refresh_alerts\"", response_text)
+        self.assertIn("query.set(\"status\", statusValue)", response_text)
         self.assertIn("/internal/alerts/${encodeURIComponent(opsAlertId)}/detail", response_text)
         self.assertIn("id=\"resolved_by\"", response_text)
+        self.assertIn("id=\"resolve_alert\"", response_text)
         self.assertIn("/resolve?tenant_id=", response_text)
 
 

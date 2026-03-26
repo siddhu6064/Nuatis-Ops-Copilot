@@ -25,6 +25,13 @@ def render_alerts_ui_page() -> str:
   <label for="tenant_id">Tenant ID:</label>
   <input id="tenant_id" type="text" placeholder="tenant_a" />
   <button id="load_alerts">Load alerts</button>
+  <label for="status_filter">Status:</label>
+  <select id="status_filter">
+    <option value="">All</option>
+    <option value="open">open</option>
+    <option value="resolved">resolved</option>
+  </select>
+  <button id="refresh_alerts">Refresh</button>
   <p id="status" class="muted"></p>
   <p id="error"></p>
 
@@ -51,6 +58,8 @@ def render_alerts_ui_page() -> str:
     const loadButton = document.getElementById("load_alerts");
     const statusNode = document.getElementById("status");
     const errorNode = document.getElementById("error");
+    const statusFilter = document.getElementById("status_filter");
+    const refreshButton = document.getElementById("refresh_alerts");
     const bodyNode = document.getElementById("alerts_body");
     const detailNode = document.getElementById("detail_output");
     const resolvedByInput = document.getElementById("resolved_by");
@@ -61,6 +70,13 @@ def render_alerts_ui_page() -> str:
 
     function setStatus(message) { statusNode.textContent = message || ""; }
     function setError(message) { errorNode.textContent = message || ""; }
+    function clearMessages() { setStatus(""); setError(""); }
+    function resetSelection() {
+      selectedAlertId = null;
+      selectedTenantId = null;
+      selectedStatus = null;
+      syncResolveButtonState();
+    }
 
     function syncResolveButtonState() {
       const resolvedBy = resolvedByInput.value.trim();
@@ -76,17 +92,14 @@ def render_alerts_ui_page() -> str:
     }
 
     async function loadDetail(tenantId, opsAlertId) {
-      setError("");
+      clearMessages();
       detailNode.textContent = "Loading detail...";
       const response = await fetch(`/internal/alerts/${encodeURIComponent(opsAlertId)}/detail?tenant_id=${encodeURIComponent(tenantId)}`);
       const payload = await response.json();
       if (!response.ok || !payload.success) {
         detailNode.textContent = "";
         setError(payload?.error?.message || "Failed to load alert detail.");
-        selectedAlertId = null;
-        selectedTenantId = null;
-        selectedStatus = null;
-        syncResolveButtonState();
+        resetSelection();
         return;
       }
       selectedAlertId = opsAlertId;
@@ -103,20 +116,21 @@ def render_alerts_ui_page() -> str:
       const tenantId = tenantInput.value.trim();
       bodyNode.innerHTML = "";
       detailNode.textContent = "Select an alert row to load details.";
-      selectedAlertId = null;
-      selectedTenantId = null;
-      selectedStatus = null;
-      syncResolveButtonState();
-      setError("");
+      resetSelection();
+      clearMessages();
 
       if (!tenantId) {
-        setStatus("");
         setError("tenant_id is required.");
         return;
       }
 
       setStatus("Loading...");
-      const response = await fetch(`/internal/alerts?tenant_id=${encodeURIComponent(tenantId)}`);
+      const statusValue = statusFilter.value;
+      const query = new URLSearchParams({ tenant_id: tenantId });
+      if (statusValue) {
+        query.set("status", statusValue);
+      }
+      const response = await fetch(`/internal/alerts?${query.toString()}`);
       const payload = await response.json();
       if (!response.ok || !payload.success) {
         setStatus("");
@@ -145,7 +159,7 @@ def render_alerts_ui_page() -> str:
     }
 
     async function resolveSelectedAlert() {
-      setError("");
+      clearMessages();
       if (!selectedAlertId || !selectedTenantId) {
         setError("Select an alert first.");
         return;
@@ -167,17 +181,24 @@ def render_alerts_ui_page() -> str:
       );
       const payload = await response.json();
       if (!response.ok || !payload.success) {
-        setStatus("");
         setError(payload?.error?.message || "Failed to resolve alert.");
         return;
       }
 
       setStatus(`Resolved ${selectedAlertId}.`);
+      const tenantIdToRefresh = selectedTenantId;
+      const alertIdToRefresh = selectedAlertId;
       await loadAlerts();
-      await loadDetail(selectedTenantId, selectedAlertId);
+      await loadDetail(tenantIdToRefresh, alertIdToRefresh);
     }
 
     loadButton.addEventListener("click", loadAlerts);
+    refreshButton.addEventListener("click", loadAlerts);
+    statusFilter.addEventListener("change", () => {
+      if (tenantInput.value.trim()) {
+        loadAlerts();
+      }
+    });
     resolveButton.addEventListener("click", resolveSelectedAlert);
     resolvedByInput.addEventListener("input", syncResolveButtonState);
   </script>

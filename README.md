@@ -155,8 +155,11 @@ Both schemas are tenant-scoped and designed for incremental lifecycle expansion.
 Run:
 
 ```bash
+# Canonical repo-wide test command:
 python -m unittest discover -s tests -v
 ```
+
+Do not use `python -m unittest` by itself in this repository; it may not discover the test suite.
 
 ## Intentionally not implemented yet
 - robust notification delivery features (retries, backoff, dead-lettering)

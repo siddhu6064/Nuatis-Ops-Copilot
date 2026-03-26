@@ -81,6 +81,18 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
 - Error (`400`, `404`):
   - `{"success": false, "error": {"code": "...", "message": "..."}}`
 
+### Minimal operator UI (read-only starter)
+- `GET /ui/alerts`
+- Purpose: tiny in-process HTML page for loading alert lists from existing APIs.
+- Uses existing endpoints:
+  - `GET /internal/alerts?tenant_id=...`
+  - `GET /internal/alerts/{ops_alert_id}/detail?tenant_id=...`
+- Current scope:
+  - tenant_id input
+  - loading/empty/error states
+  - table columns: `ops_alert_id`, `status`, `alert_type`, `created_at`
+  - optional row click for detail preview
+
 ### Single resolve endpoint
 - `POST /internal/alerts/{ops_alert_id}/resolve?tenant_id=...`
 - Purpose: resolve one alert with existing idempotent resolve semantics.

@@ -24,3 +24,8 @@ class EventPublishResult:
 class InternalEventPublisher(Protocol):
     def publish(self, event: InternalEvent) -> EventPublishResult:
         ...
+
+
+class InternalEventSubscriber(Protocol):
+    def handle(self, event: InternalEvent) -> None:
+        ...

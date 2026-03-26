@@ -5,10 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-<<<<<<< codex/build-nuatis-ops-copilot-service
 from domain.internal_event_contracts import EventPublishResult, InternalEvent, InternalEventPublisher
-=======
->>>>>>> siddhu6064
 from domain.timestamp_validation import is_valid_iso8601
 from repositories.ops_alerts_repository import OpsAlertsRepository
 
@@ -22,7 +19,6 @@ class OpsAlertsService:
         "status",
     )
 
-<<<<<<< codex/build-nuatis-ops-copilot-service
     def __init__(
         self,
         repository: OpsAlertsRepository,
@@ -30,10 +26,6 @@ class OpsAlertsService:
     ) -> None:
         self._repository = repository
         self._event_publisher = event_publisher
-=======
-    def __init__(self, repository: OpsAlertsRepository) -> None:
-        self._repository = repository
->>>>>>> siddhu6064
 
     def create_ops_alert(self, alert_data: dict[str, Any]) -> dict[str, Any]:
         missing = [field for field in self.REQUIRED_CREATE_FIELDS if not alert_data.get(field)]
@@ -52,7 +44,6 @@ class OpsAlertsService:
             }
 
         self._repository.create_alert(alert_data)
-<<<<<<< codex/build-nuatis-ops-copilot-service
         self._publish_internal_event(
             InternalEvent(
                 event_type="alert_created",
@@ -66,9 +57,6 @@ class OpsAlertsService:
                 },
             )
         )
-=======
->>>>>>> siddhu6064
-
         return {
             "ops_alert_id": alert_data["ops_alert_id"],
             "tenant_id": alert_data["tenant_id"],
@@ -99,21 +87,15 @@ class OpsAlertsService:
         if isinstance(resolved_by, str) and resolved_by.strip() == "":
             raise ValueError("resolved_by must be a non-empty string when provided.")
 
-<<<<<<< codex/build-nuatis-ops-copilot-service
         existing = self._repository.get_alert_by_id(tenant_id, ops_alert_id)
 
         timestamp = resolved_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         resolved = self._repository.resolve_alert(
-=======
-        timestamp = resolved_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        return self._repository.resolve_alert(
->>>>>>> siddhu6064
             tenant_id=tenant_id,
             ops_alert_id=ops_alert_id,
             resolved_at=timestamp,
             resolved_by=resolved_by,
         )
-<<<<<<< codex/build-nuatis-ops-copilot-service
         if resolved and existing is not None and existing["status"] == "open":
             self._publish_internal_event(
                 InternalEvent(
@@ -127,9 +109,6 @@ class OpsAlertsService:
                 )
             )
         return resolved
-=======
->>>>>>> siddhu6064
-
     def bulk_resolve_ops_alerts(
         self,
         *,
@@ -181,7 +160,6 @@ class OpsAlertsService:
                 already_resolved_count += 1
                 results.append({"ops_alert_id": ops_alert_id, "result": "already_resolved"})
             else:
-<<<<<<< codex/build-nuatis-ops-copilot-service
                 self._publish_internal_event(
                     InternalEvent(
                         event_type="alert_resolved",
@@ -193,8 +171,6 @@ class OpsAlertsService:
                         },
                     )
                 )
-=======
->>>>>>> siddhu6064
                 resolved_count += 1
                 results.append({"ops_alert_id": ops_alert_id, "result": "resolved"})
 
@@ -222,7 +198,6 @@ class OpsAlertsService:
             alert_type=alert_data["alert_type"],
             source_event_id=source_event_id,
         )
-<<<<<<< codex/build-nuatis-ops-copilot-service
 
     def _publish_internal_event(self, event: InternalEvent) -> EventPublishResult:
         if self._event_publisher is None:
@@ -232,5 +207,3 @@ class OpsAlertsService:
             return self._event_publisher.publish(event)
         except Exception as exc:  # noqa: BLE001 - publisher failures must not break core alert flows
             return EventPublishResult(success=False, message=str(exc))
-=======
->>>>>>> siddhu6064

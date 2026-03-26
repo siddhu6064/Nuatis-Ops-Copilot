@@ -1,4 +1,5 @@
 import unittest
+import json
 from pathlib import Path
 
 from db.connection import connect, disconnect
@@ -40,10 +41,13 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
         self.assertEqual(summary["alerts_created"], 1)
         self.assertEqual(summary["alerts_deduped"], 0)
         self.assertEqual(summary["results"][0]["result"], "matched_created")
+        self.assertEqual(summary["results"][0]["outcome"], "created")
 
         alert_id = summary["results"][0]["ops_alert_id"]
         stored = self.repo.get_alert_by_id("tenant_a", alert_id)
         self.assertIsNotNone(stored)
+        details = json.loads(stored["details_json"])
+        self.assertEqual(details["detector_name"], "booking_failure_high_severity")
 
     def test_non_matching_event_produces_zero_matches(self) -> None:
         summary = self.orchestrator.evaluate_event(
@@ -61,6 +65,7 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
         self.assertEqual(summary["alerts_created"], 0)
         self.assertEqual(summary["alerts_deduped"], 0)
         self.assertEqual(summary["results"][0]["result"], "no_match")
+        self.assertEqual(summary["results"][0]["outcome"], "no_match")
 
     def test_detector_returning_none_creates_no_alert(self) -> None:
         class NoopDetector:
@@ -83,6 +88,7 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
         self.assertEqual(summary["matches"], 0)
         self.assertEqual(summary["alerts_created"], 0)
         self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 0)
+        self.assertEqual(summary["results"][0]["outcome"], "no_match")
 
     def test_orchestration_preserves_tenant_scoped_behavior(self) -> None:
         alpha = self.orchestrator.evaluate_event(
@@ -124,6 +130,24 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
                     "payload_json": '{"severity":"high"}',
                 }
             )
+
+    def test_summary_shape_keeps_existing_top_level_fields(self) -> None:
+        summary = self.orchestrator.evaluate_event(
+            {
+                "activity_event_id": "or_act_shape",
+                "tenant_id": "tenant_shape",
+                "event_id": "evt_shape",
+                "event_type": "call.completed",
+                "payload_json": "{}",
+            }
+        )
+
+        self.assertIn("tenant_id", summary)
+        self.assertIn("detectors_run", summary)
+        self.assertIn("matches", summary)
+        self.assertIn("alerts_created", summary)
+        self.assertIn("alerts_deduped", summary)
+        self.assertIn("results", summary)
 
     def test_second_matching_event_is_deduped(self) -> None:
         first = self.orchestrator.evaluate_event(
@@ -186,3 +210,45 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
         self.assertEqual(summary["alerts_created"], 1)
         self.assertEqual(summary["results"][0]["result"], "no_match")
         self.assertEqual(summary["results"][1]["result"], "matched_created")
+        self.assertEqual(summary["results"][0]["outcome"], "no_match")
+        self.assertEqual(summary["results"][1]["outcome"], "created")
+
+    def test_detector_exception_isolated_and_later_detector_runs(self) -> None:
+        class FailingDetector:
+            def evaluate(self, event: dict) -> None:
+                raise ValueError("detector blew up")
+
+        class MatchingDetector:
+            def evaluate(self, event: dict) -> DetectorResult:
+                return DetectorResult(
+                    alert_type="booking_failure_high_severity",
+                    dedup_key=event["event_id"],
+                    payload={"rule": "match-after-error"},
+                    detector_name="matching_after_error",
+                )
+
+        orchestrator = DetectorOrchestrationService(
+            self.alert_service,
+            detector_registry=[
+                ("failing_detector", FailingDetector()),
+                ("matching_detector", MatchingDetector()),
+            ],
+        )
+        summary = orchestrator.evaluate_event(
+            {
+                "activity_event_id": "or_act_err_1",
+                "tenant_id": "tenant_err",
+                "event_id": "evt_err_1",
+                "event_type": "booking.failed",
+                "payload_json": "{}",
+            }
+        )
+
+        self.assertEqual(summary["detectors_run"], 2)
+        self.assertEqual(summary["matches"], 1)
+        self.assertEqual(summary["alerts_created"], 1)
+        self.assertEqual(summary["results"][0]["outcome"], "error")
+        self.assertEqual(summary["results"][0]["error"], "detector blew up")
+        self.assertEqual(summary["results"][1]["outcome"], "created")
+        stored_alerts = self.repo.list_alerts_by_tenant("tenant_err")
+        self.assertEqual(len(stored_alerts), 1)

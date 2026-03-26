@@ -22,6 +22,7 @@ class BookingFailureHighSeverityDetectorTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result.alert_type, "booking_failure_high_severity")
         self.assertEqual(result.dedup_key, "evt_1")
+        self.assertEqual(result.detector_name, "booking_failure_high_severity")
         self.assertEqual(result.severity, "high")
 
     def test_non_matching_event_returns_none(self) -> None:

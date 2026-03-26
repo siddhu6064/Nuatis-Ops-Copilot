@@ -36,14 +36,25 @@ class DetectorOrchestrationService:
         alerts_deduped = 0
 
         for detector_name, detector in self._detectors:
-            detector_result = detector.evaluate(activity_event)
-            result_type = "no_match"
             result = {
                 "detector": detector_name,
                 "result": "no_match",
+                "outcome": "no_match",
+                "evaluated": True,
             }
+            detector_result = None
+
+            try:
+                detector_result = detector.evaluate(activity_event)
+            except Exception as exc:  # noqa: BLE001 - detector errors are isolated by design
+                result["result"] = "error"
+                result["outcome"] = "error"
+                result["error"] = str(exc)
+                results.append(result)
+                continue
 
             if detector_result is not None:
+                attributed_detector_name = detector_result.detector_name or detector_name
                 create_result = self._alerts_service.create_ops_alert(
                     {
                         "ops_alert_id": f"ops_alert_{activity_event['tenant_id']}_{detector_result.dedup_key}",
@@ -56,16 +67,19 @@ class DetectorOrchestrationService:
                             {
                                 "payload": detector_result.payload,
                                 "severity": detector_result.severity,
+                                "detector_name": attributed_detector_name,
                                 "metadata": detector_result.metadata or {},
                             }
                         ),
                     }
                 )
-                result_type = "matched_created" if create_result["result"] == "created" else "matched_deduped"
-                result["result"] = result_type
+                is_created = create_result["result"] == "created"
+                result["result"] = "matched_created" if is_created else "matched_deduped"
+                result["outcome"] = "created" if is_created else "deduped"
                 result["ops_alert_id"] = create_result["ops_alert_id"]
+                result["alert_type"] = detector_result.alert_type
                 matches += 1
-                if result_type == "matched_created":
+                if is_created:
                     alerts_created += 1
                 else:
                     alerts_deduped += 1

@@ -11,6 +11,7 @@ class DetectorResult:
     alert_type: str
     dedup_key: str
     payload: dict[str, Any]
+    detector_name: str | None = None
     severity: str | None = None
     metadata: dict[str, Any] | None = None
 

@@ -36,6 +36,7 @@ class BookingFailureHighSeverityDetector:
         return DetectorResult(
             alert_type="booking_failure_high_severity",
             dedup_key=source_event_id,
+            detector_name="booking_failure_high_severity",
             payload={
                 "rule": "booking.failed + severity=high",
                 "event_type": activity_event["event_type"],

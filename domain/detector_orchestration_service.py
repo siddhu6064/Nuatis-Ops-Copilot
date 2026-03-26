@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from domain.detector_contracts import Detector
+from domain.notification_contracts import Notifier
 from domain.ops_alerts_service import OpsAlertsService
 from workers.detectors.booking_failure_high_severity_detector import BookingFailureHighSeverityDetector
 from workers.detectors.call_failure_high_severity_detector import CallFailureHighSeverityDetector
@@ -22,9 +23,11 @@ class DetectorOrchestrationService:
         self,
         alerts_service: OpsAlertsService,
         detector_registry: list[tuple[str, Detector]] | None = None,
+        notifier: Notifier | None = None,
     ) -> None:
         self._alerts_service = alerts_service
         self._detectors = detector_registry or DETECTOR_REGISTRY
+        self._notifier = notifier
 
     def evaluate_event(self, activity_event: dict[str, Any]) -> dict[str, Any]:
         if not activity_event.get("tenant_id"):
@@ -83,6 +86,20 @@ class DetectorOrchestrationService:
                 matches += 1
                 if is_created:
                     alerts_created += 1
+                    if self._notifier is not None:
+                        try:
+                            created_alert = self._alerts_service.get_ops_alert(
+                                tenant_id=activity_event["tenant_id"],
+                                ops_alert_id=create_result["ops_alert_id"],
+                            )
+                            if created_alert is not None:
+                                notification_result = self._notifier.notify(created_alert)
+                                result["notification"] = {
+                                    "success": notification_result.success,
+                                    "message": notification_result.message,
+                                }
+                        except Exception as exc:  # noqa: BLE001 - notification must not break alert flow
+                            result["notification"] = {"success": False, "message": str(exc)}
                 else:
                     alerts_deduped += 1
 

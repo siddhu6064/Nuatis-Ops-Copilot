@@ -46,6 +46,11 @@ class OpsAlertsService:
             "result": "created",
         }
 
+    def get_ops_alert(self, *, tenant_id: str, ops_alert_id: str) -> dict[str, Any] | None:
+        if not tenant_id or not ops_alert_id:
+            raise ValueError("tenant_id and ops_alert_id are required")
+        return self._repository.get_alert_by_id(tenant_id, ops_alert_id)
+
     def resolve_ops_alert(
         self,
         tenant_id: str,

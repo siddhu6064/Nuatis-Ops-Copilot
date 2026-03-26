@@ -93,6 +93,27 @@ class AlertApiResponseConsistencyTests(unittest.TestCase):
         self.assertIsInstance(response["data"], list)
         self.assertIn("resolved_count", response["meta"])
 
+    def test_single_resolve_success_response_shape(self) -> None:
+        self.repo.create_alert(
+            {
+                "ops_alert_id": "shape_4",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "open",
+            }
+        )
+        status, response = self.call(
+            "POST",
+            "/internal/alerts/shape_4/resolve",
+            query="tenant_id=tenant_a",
+            payload={"resolved_by": "ops_user"},
+        )
+
+        self.assertTrue(status.startswith("200"))
+        self.assertEqual(set(response.keys()), {"success", "data"})
+        self.assertTrue(response["success"])
+        self.assertEqual(response["data"]["ops_alert_id"], "shape_4")
+
     def test_error_response_shape_for_400(self) -> None:
         status, response = self.call(
             "POST",
@@ -107,6 +128,19 @@ class AlertApiResponseConsistencyTests(unittest.TestCase):
 
     def test_error_response_shape_for_404(self) -> None:
         status, response = self.call("GET", "/internal/alerts/not_here/detail", "tenant_id=tenant_a")
+
+        self.assertTrue(status.startswith("404"))
+        self.assertEqual(set(response.keys()), {"success", "error"})
+        self.assertFalse(response["success"])
+        self.assertEqual(set(response["error"].keys()), {"code", "message"})
+
+    def test_error_response_shape_for_404_on_single_resolve(self) -> None:
+        status, response = self.call(
+            "POST",
+            "/internal/alerts/not_here/resolve",
+            query="tenant_id=tenant_a",
+            payload={"resolved_by": "ops_user"},
+        )
 
         self.assertTrue(status.startswith("404"))
         self.assertEqual(set(response.keys()), {"success", "error"})

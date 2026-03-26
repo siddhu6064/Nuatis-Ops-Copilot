@@ -4,10 +4,29 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
 
 ## What is implemented now
 
+### API response contract
+- Success responses use:
+  - `{"success": true, "data": ...}`
+  - optional `meta` when pagination/count metadata is useful.
+- Error responses use:
+  - `{"success": false, "error": {"code": "...", "message": "..."}}`
+- Common status codes:
+  - `200` success
+  - `400` validation error
+  - `404` not found
+  - `409` duplicate ingest conflict
+  - `500` unexpected error
+
 ### Ingestion
 - `POST /internal/events/activity`
-- Validates required fields, persists one activity event, then runs detector orchestration.
-- Returns a detector summary in the success response.
+- Purpose: persist one activity event and run detector orchestration.
+- Request body (required fields):
+  - `activity_event_id`, `tenant_id`, `event_id`, `event_type`, `event_source`,
+    `occurred_at`, `payload_json`
+- Success (`201`):
+  - `{"success": true, "data": {"activity_event_id": "...", "tenant_id": "...", "event_id": "...", "detector_summary": {...}}}`
+- Error (`400`, `409`):
+  - `{"success": false, "error": {"code": "...", "message": "..."}}`
 
 ### Detector orchestration
 - `DetectorOrchestrationService` runs configured detectors in sequence for a single event.
@@ -25,18 +44,47 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
 
 ### Alerts persistence and lifecycle foundation
 - `ops_alerts` are persisted through repository/service layers.
-- Read endpoints:
-  - `GET /internal/alerts?tenant_id=...`
-  - `GET /internal/alerts/{ops_alert_id}?tenant_id=...`
-- Resolve endpoint:
-  - `POST /internal/alerts/{ops_alert_id}/resolve?tenant_id=...`
-  - optional JSON body: `{ "resolved_at": "..." }`
-  - if omitted, server-generated UTC timestamp is used.
-- Alert list supports:
-  - `limit`, `offset`, `status`, `created_after`, `created_before`, `sort_order`
-  - `sort_order` accepts `asc` or `desc` (default `desc`)
-  - `limit` defaults to `50` and is capped at `200`
 - Tenant scoping is mandatory for all alert reads and resolve operations.
+
+### Alert list endpoint
+- `GET /internal/alerts?tenant_id=...`
+- Purpose: list tenant-scoped alerts with filters and pagination.
+- Query params:
+  - required: `tenant_id`
+  - optional: `status`, `created_after`, `created_before`, `limit`, `offset`, `sort_order`
+- Success (`200`):
+  - `{"success": true, "data": [ ...alerts... ], "meta": {"tenant_id": "...", "pagination": {"limit": N, "offset": N}, "filters": {...}}}`
+- Error (`400`):
+  - `{"success": false, "error": {"code": "validation_error", "message": "..."}}`
+
+### Alert detail endpoint
+- `GET /internal/alerts/{ops_alert_id}/detail?tenant_id=...`
+- Purpose: fetch one tenant-scoped alert record.
+- Success (`200`):
+  - `{"success": true, "data": {"ops_alert_id": "...", "tenant_id": "...", "status": "...", "created_at": "...", "resolved_at": "...", "resolved_by": "...", "details_json": "..."}}`
+- Error (`400`, `404`):
+  - `{"success": false, "error": {"code": "...", "message": "..."}}`
+
+### Single resolve endpoint
+- `POST /internal/alerts/{ops_alert_id}/resolve?tenant_id=...`
+- Purpose: resolve one alert with existing idempotent resolve semantics.
+- Optional body: `{ "resolved_at": "...", "resolved_by": "..." }`
+- Success (`200`):
+  - `{"success": true, "data": {"ops_alert_id": "...", "status": "resolved"}}`
+- Error (`400`, `404`):
+  - `{"success": false, "error": {"code": "...", "message": "..."}}`
+
+### Bulk resolve endpoint
+- `POST /internal/alerts/resolve/bulk`
+- Purpose: resolve multiple alerts in one tenant-scoped request.
+- Request body:
+  - `tenant_id` (required)
+  - `ops_alert_ids` non-empty list (required)
+  - `resolved_by` (optional), `resolved_at` (optional)
+- Success (`200`):
+  - `{"success": true, "data": [{"ops_alert_id": "...", "result": "resolved|already_resolved|not_found"}], "meta": {"requested_count": N, "resolved_count": N, "already_resolved_count": N, "not_found_count": N}}`
+- Error (`400`):
+  - `{"success": false, "error": {"code": "validation_error", "message": "..."}}`
 
 
 ### Lifecycle model and transition rules

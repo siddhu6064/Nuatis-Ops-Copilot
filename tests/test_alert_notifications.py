@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 
 from db.connection import connect, disconnect
+from api.activity_events_endpoint import _build_configured_notifier
 from domain.detector_orchestration_service import DetectorOrchestrationService
 from domain.notification_contracts import NotificationResult
 from domain.ops_alerts_service import OpsAlertsService
@@ -67,6 +68,8 @@ class AlertNotificationTests(unittest.TestCase):
         self.assertEqual(summary["alerts_created"], 1)
         self.assertEqual(len(spy.calls), 1)
         self.assertEqual(spy.calls[0]["ops_alert_id"], summary["results"][0]["ops_alert_id"])
+        self.assertTrue(summary["results"][0]["notification"]["attempted"])
+        self.assertTrue(summary["results"][0]["notification"]["success"])
 
     def test_deduped_alert_does_not_trigger_notifier(self) -> None:
         spy = SpyNotifier()
@@ -77,6 +80,7 @@ class AlertNotificationTests(unittest.TestCase):
 
         self.assertEqual(second["alerts_deduped"], 1)
         self.assertEqual(len(spy.calls), 1)
+        self.assertNotIn("notification", second["results"][0])
 
     def test_notifier_failure_is_isolated(self) -> None:
         orchestration = DetectorOrchestrationService(self.alert_service, notifier=FailingNotifier())
@@ -84,6 +88,7 @@ class AlertNotificationTests(unittest.TestCase):
         summary = orchestration.evaluate_event(self._event("evt_notify_fail"))
 
         self.assertEqual(summary["alerts_created"], 1)
+        self.assertTrue(summary["results"][0]["notification"]["attempted"])
         self.assertFalse(summary["results"][0]["notification"]["success"])
         stored = self.repo.get_alert_by_id("tenant_a", summary["results"][0]["ops_alert_id"])
         self.assertIsNotNone(stored)
@@ -104,6 +109,26 @@ class AlertNotificationTests(unittest.TestCase):
         self.assertEqual(payload["alert_type"], "booking_failure_high_severity")
         self.assertIn("created_at", payload)
         self.assertIn("details_json", payload)
+
+    def test_notifications_disabled_results_in_no_notifier_attempt(self) -> None:
+        notifier = _build_configured_notifier(False, "https://example.test/webhook")
+        orchestration = DetectorOrchestrationService(self.alert_service, notifier=notifier)
+
+        summary = orchestration.evaluate_event(self._event("evt_disabled"))
+
+        self.assertEqual(summary["alerts_created"], 1)
+        self.assertFalse(summary["results"][0]["notification"]["attempted"])
+        self.assertFalse(summary["results"][0]["notification"]["success"])
+
+    def test_missing_webhook_url_results_in_noop_notifier_behavior(self) -> None:
+        notifier = _build_configured_notifier(True, None)
+        orchestration = DetectorOrchestrationService(self.alert_service, notifier=notifier)
+
+        summary = orchestration.evaluate_event(self._event("evt_missing_url"))
+
+        self.assertEqual(summary["alerts_created"], 1)
+        self.assertFalse(summary["results"][0]["notification"]["attempted"])
+        self.assertFalse(summary["results"][0]["notification"]["success"])
 
 
 if __name__ == "__main__":

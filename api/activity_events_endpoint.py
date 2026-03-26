@@ -6,12 +6,15 @@ import json
 import sqlite3
 from typing import Any
 
+from config.settings import load_settings
 from db.connection import DatabaseConnection
 from domain.detector_orchestration_service import DetectorOrchestrationService
+from domain.notification_contracts import Notifier
 from domain.ops_alerts_service import OpsAlertsService
 from domain.timestamp_validation import is_valid_iso8601
 from repositories.activity_events_repository import ActivityEventsRepository
 from repositories.ops_alerts_repository import OpsAlertsRepository
+from workers.notifiers.webhook_notifier import UrllibWebhookTransport, WebhookNotifier
 
 
 ENDPOINT_PATH = "/internal/events/activity"
@@ -95,7 +98,12 @@ def ingest_activity_event(payload: dict[str, Any], db: DatabaseConnection) -> tu
             },
         )
 
-    orchestration = DetectorOrchestrationService(OpsAlertsService(OpsAlertsRepository(db)))
+    settings = load_settings()
+    notifier = _build_configured_notifier(settings.notifications_enabled, settings.webhook_url)
+    orchestration = DetectorOrchestrationService(
+        OpsAlertsService(OpsAlertsRepository(db)),
+        notifier=notifier,
+    )
     detector_input = {**payload, "payload_json": normalized_payload_json}
     detector_summary = orchestration.evaluate_event(detector_input)
 
@@ -111,3 +119,14 @@ def ingest_activity_event(payload: dict[str, Any], db: DatabaseConnection) -> tu
             },
         },
     )
+
+
+def _build_configured_notifier(
+    notifications_enabled: bool,
+    webhook_url: str | None,
+) -> Notifier | None:
+    if not notifications_enabled:
+        return None
+    if webhook_url is None:
+        return None
+    return WebhookNotifier(webhook_url, UrllibWebhookTransport())

@@ -35,6 +35,22 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
     - Rule: match `event_type == "booking.failed"` and payload severity `"high"`.
     - On match, creates one ops alert or dedups against an existing open alert.
 
+### Notifications (minimal webhook foundation)
+- Notifications are best-effort and synchronous.
+- Notifications are attempted only when detector orchestration results in a **newly created** alert.
+- Notifications are **not** attempted for:
+  - deduped alerts
+  - read requests
+  - resolve requests
+- Webhook payload fields:
+  - `ops_alert_id`, `tenant_id`, `status`, `alert_type`, `created_at`, `details_json`
+- Failure behavior:
+  - notification failure does **not** block alert creation
+  - orchestration result includes notification attempt/success metadata for created alerts
+- Configuration:
+  - `NOTIFICATIONS_ENABLED` (`true`/`false`, default `false`)
+  - `WEBHOOK_URL` (required when notifications are enabled)
+
 
 ### Timestamp validation rules
 - `occurred_at` (ingestion) must be valid ISO-8601.
@@ -143,7 +159,7 @@ python -m unittest discover -s tests -v
 ```
 
 ## Intentionally not implemented yet
-- notifications / outbound delivery
+- robust notification delivery features (retries, backoff, dead-lettering)
 - websocket streaming
 - dashboard/UI work
 - distributed dedup engine / cross-process locking

@@ -86,6 +86,11 @@ class DetectorOrchestrationService:
                 matches += 1
                 if is_created:
                     alerts_created += 1
+                    result["notification"] = {
+                        "attempted": False,
+                        "success": False,
+                        "message": "notifier_not_configured",
+                    }
                     if self._notifier is not None:
                         try:
                             created_alert = self._alerts_service.get_ops_alert(
@@ -95,11 +100,16 @@ class DetectorOrchestrationService:
                             if created_alert is not None:
                                 notification_result = self._notifier.notify(created_alert)
                                 result["notification"] = {
+                                    "attempted": True,
                                     "success": notification_result.success,
                                     "message": notification_result.message,
                                 }
                         except Exception as exc:  # noqa: BLE001 - notification must not break alert flow
-                            result["notification"] = {"success": False, "message": str(exc)}
+                            result["notification"] = {
+                                "attempted": True,
+                                "success": False,
+                                "message": str(exc),
+                            }
                 else:
                     alerts_deduped += 1
 

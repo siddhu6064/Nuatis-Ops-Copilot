@@ -88,6 +88,7 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
   - `GET /internal/alerts?tenant_id=...`
   - `GET /internal/alerts/{ops_alert_id}/detail?tenant_id=...`
 - Current scope:
+  - intentionally minimal, read-mostly operator helper page (not a full dashboard)
   - tenant_id input
   - loading/empty/error states
   - status filter (`all`/`open`/`resolved`) using existing list API query parameter

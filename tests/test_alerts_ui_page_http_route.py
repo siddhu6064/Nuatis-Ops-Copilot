@@ -47,6 +47,7 @@ class AlertsUiPageHttpRouteTests(unittest.TestCase):
         self.assertIn("query.set(\"status\", statusValue)", response_text)
         self.assertIn("/internal/alerts/${encodeURIComponent(opsAlertId)}/detail", response_text)
         self.assertIn("id=\"resolved_by\"", response_text)
+        self.assertIn("id=\"resolve_alert\"", response_text)
         self.assertIn("/resolve?tenant_id=", response_text)
 
 

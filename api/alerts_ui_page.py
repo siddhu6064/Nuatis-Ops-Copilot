@@ -70,6 +70,13 @@ def render_alerts_ui_page() -> str:
 
     function setStatus(message) { statusNode.textContent = message || ""; }
     function setError(message) { errorNode.textContent = message || ""; }
+    function clearMessages() { setStatus(""); setError(""); }
+    function resetSelection() {
+      selectedAlertId = null;
+      selectedTenantId = null;
+      selectedStatus = null;
+      syncResolveButtonState();
+    }
 
     function syncResolveButtonState() {
       const resolvedBy = resolvedByInput.value.trim();
@@ -85,17 +92,14 @@ def render_alerts_ui_page() -> str:
     }
 
     async function loadDetail(tenantId, opsAlertId) {
-      setError("");
+      clearMessages();
       detailNode.textContent = "Loading detail...";
       const response = await fetch(`/internal/alerts/${encodeURIComponent(opsAlertId)}/detail?tenant_id=${encodeURIComponent(tenantId)}`);
       const payload = await response.json();
       if (!response.ok || !payload.success) {
         detailNode.textContent = "";
         setError(payload?.error?.message || "Failed to load alert detail.");
-        selectedAlertId = null;
-        selectedTenantId = null;
-        selectedStatus = null;
-        syncResolveButtonState();
+        resetSelection();
         return;
       }
       selectedAlertId = opsAlertId;
@@ -112,14 +116,10 @@ def render_alerts_ui_page() -> str:
       const tenantId = tenantInput.value.trim();
       bodyNode.innerHTML = "";
       detailNode.textContent = "Select an alert row to load details.";
-      selectedAlertId = null;
-      selectedTenantId = null;
-      selectedStatus = null;
-      syncResolveButtonState();
-      setError("");
+      resetSelection();
+      clearMessages();
 
       if (!tenantId) {
-        setStatus("");
         setError("tenant_id is required.");
         return;
       }
@@ -159,7 +159,7 @@ def render_alerts_ui_page() -> str:
     }
 
     async function resolveSelectedAlert() {
-      setError("");
+      clearMessages();
       if (!selectedAlertId || !selectedTenantId) {
         setError("Select an alert first.");
         return;
@@ -181,7 +181,6 @@ def render_alerts_ui_page() -> str:
       );
       const payload = await response.json();
       if (!response.ok || !payload.success) {
-        setStatus("");
         setError(payload?.error?.message || "Failed to resolve alert.");
         return;
       }

@@ -2,7 +2,10 @@ import unittest
 from pathlib import Path
 
 from db.connection import connect, disconnect
+<<<<<<< codex/build-nuatis-ops-copilot-service
 from domain.internal_event_contracts import EventPublishResult, InternalEvent
+=======
+>>>>>>> siddhu6064
 from domain.ops_alerts_service import OpsAlertsService
 from repositories.ops_alerts_repository import OpsAlertsRepository
 
@@ -231,6 +234,7 @@ class OpsAlertsServiceTests(unittest.TestCase):
         self.assertEqual(stored["status"], "resolved")
         self.assertEqual(stored["resolved_at"], "2026-03-26T00:20:00Z")
         self.assertEqual(stored["resolved_by"], "ops_user_1")
+<<<<<<< codex/build-nuatis-ops-copilot-service
 
     def test_newly_created_alert_publishes_alert_created_event(self) -> None:
         publisher = SpyEventPublisher()
@@ -333,3 +337,5 @@ class SpyEventPublisher:
 class FailingEventPublisher:
     def publish(self, event: InternalEvent) -> EventPublishResult:
         raise RuntimeError("publisher failed")
+=======
+>>>>>>> siddhu6064

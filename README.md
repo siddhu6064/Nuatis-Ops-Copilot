@@ -92,6 +92,10 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
   - loading/empty/error states
   - table columns: `ops_alert_id`, `status`, `alert_type`, `created_at`
   - optional row click for detail preview
+  - minimal resolve action for selected alert using:
+    - `POST /internal/alerts/{ops_alert_id}/resolve?tenant_id=...`
+    - requires `resolved_by` UI input
+    - disabled for already-resolved alerts
 
 ### Single resolve endpoint
 - `POST /internal/alerts/{ops_alert_id}/resolve?tenant_id=...`

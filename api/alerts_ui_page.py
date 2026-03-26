@@ -41,6 +41,9 @@ def render_alerts_ui_page() -> str:
   </table>
 
   <h2>Alert detail</h2>
+  <label for="resolved_by">resolved_by:</label>
+  <input id="resolved_by" type="text" placeholder="ops_user_1" />
+  <button id="resolve_alert" disabled>Resolve selected alert</button>
   <pre id="detail_output" class="muted">Select an alert row to load details.</pre>
 
   <script>
@@ -50,9 +53,27 @@ def render_alerts_ui_page() -> str:
     const errorNode = document.getElementById("error");
     const bodyNode = document.getElementById("alerts_body");
     const detailNode = document.getElementById("detail_output");
+    const resolvedByInput = document.getElementById("resolved_by");
+    const resolveButton = document.getElementById("resolve_alert");
+    let selectedAlertId = null;
+    let selectedTenantId = null;
+    let selectedStatus = null;
 
     function setStatus(message) { statusNode.textContent = message || ""; }
     function setError(message) { errorNode.textContent = message || ""; }
+
+    function syncResolveButtonState() {
+      const resolvedBy = resolvedByInput.value.trim();
+      if (!selectedAlertId || !selectedTenantId) {
+        resolveButton.disabled = true;
+        return;
+      }
+      if (selectedStatus === "resolved") {
+        resolveButton.disabled = true;
+        return;
+      }
+      resolveButton.disabled = resolvedBy.length === 0;
+    }
 
     async function loadDetail(tenantId, opsAlertId) {
       setError("");
@@ -62,15 +83,30 @@ def render_alerts_ui_page() -> str:
       if (!response.ok || !payload.success) {
         detailNode.textContent = "";
         setError(payload?.error?.message || "Failed to load alert detail.");
+        selectedAlertId = null;
+        selectedTenantId = null;
+        selectedStatus = null;
+        syncResolveButtonState();
         return;
       }
+      selectedAlertId = opsAlertId;
+      selectedTenantId = tenantId;
+      selectedStatus = payload.data?.status || null;
+      syncResolveButtonState();
       detailNode.textContent = JSON.stringify(payload.data, null, 2);
+      if (selectedStatus === "resolved") {
+        setStatus("Alert is already resolved.");
+      }
     }
 
     async function loadAlerts() {
       const tenantId = tenantInput.value.trim();
       bodyNode.innerHTML = "";
       detailNode.textContent = "Select an alert row to load details.";
+      selectedAlertId = null;
+      selectedTenantId = null;
+      selectedStatus = null;
+      syncResolveButtonState();
       setError("");
 
       if (!tenantId) {
@@ -108,7 +144,42 @@ def render_alerts_ui_page() -> str:
       });
     }
 
+    async function resolveSelectedAlert() {
+      setError("");
+      if (!selectedAlertId || !selectedTenantId) {
+        setError("Select an alert first.");
+        return;
+      }
+      const resolvedBy = resolvedByInput.value.trim();
+      if (!resolvedBy) {
+        setError("resolved_by is required.");
+        syncResolveButtonState();
+        return;
+      }
+      setStatus("Resolving...");
+      const response = await fetch(
+        `/internal/alerts/${encodeURIComponent(selectedAlertId)}/resolve?tenant_id=${encodeURIComponent(selectedTenantId)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resolved_by: resolvedBy }),
+        }
+      );
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        setStatus("");
+        setError(payload?.error?.message || "Failed to resolve alert.");
+        return;
+      }
+
+      setStatus(`Resolved ${selectedAlertId}.`);
+      await loadAlerts();
+      await loadDetail(selectedTenantId, selectedAlertId);
+    }
+
     loadButton.addEventListener("click", loadAlerts);
+    resolveButton.addEventListener("click", resolveSelectedAlert);
+    resolvedByInput.addEventListener("input", syncResolveButtonState);
   </script>
 </body>
 </html>

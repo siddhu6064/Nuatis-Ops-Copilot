@@ -57,6 +57,7 @@ class OpsAlertsService:
                 },
             )
         )
+
         return {
             "ops_alert_id": alert_data["ops_alert_id"],
             "tenant_id": alert_data["tenant_id"],
@@ -109,6 +110,7 @@ class OpsAlertsService:
                 )
             )
         return resolved
+
     def bulk_resolve_ops_alerts(
         self,
         *,

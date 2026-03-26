@@ -2,6 +2,10 @@ import unittest
 from pathlib import Path
 
 from db.connection import connect, disconnect
+<<<<<<< codex/build-nuatis-ops-copilot-service
+from domain.internal_event_contracts import EventPublishResult, InternalEvent
+=======
+>>>>>>> siddhu6064
 from domain.ops_alerts_service import OpsAlertsService
 from repositories.ops_alerts_repository import OpsAlertsRepository
 
@@ -230,3 +234,108 @@ class OpsAlertsServiceTests(unittest.TestCase):
         self.assertEqual(stored["status"], "resolved")
         self.assertEqual(stored["resolved_at"], "2026-03-26T00:20:00Z")
         self.assertEqual(stored["resolved_by"], "ops_user_1")
+<<<<<<< codex/build-nuatis-ops-copilot-service
+
+    def test_newly_created_alert_publishes_alert_created_event(self) -> None:
+        publisher = SpyEventPublisher()
+        service = OpsAlertsService(self.repo, event_publisher=publisher)
+
+        result = service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_publish_1",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(result["result"], "created")
+        self.assertEqual(len(publisher.events), 1)
+        self.assertEqual(publisher.events[0].event_type, "alert_created")
+        self.assertEqual(publisher.events[0].payload["ops_alert_id"], "svc_alert_publish_1")
+
+    def test_resolved_alert_publishes_alert_resolved_event(self) -> None:
+        publisher = SpyEventPublisher()
+        service = OpsAlertsService(self.repo, event_publisher=publisher)
+        service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_publish_2",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "open",
+            }
+        )
+
+        resolved = service.resolve_ops_alert(
+            tenant_id="tenant_a",
+            ops_alert_id="svc_alert_publish_2",
+            resolved_at="2026-03-26T03:00:00Z",
+        )
+
+        self.assertTrue(resolved)
+        self.assertEqual([event.event_type for event in publisher.events], ["alert_created", "alert_resolved"])
+
+    def test_deduped_alert_does_not_publish_additional_alert_created_event(self) -> None:
+        publisher = SpyEventPublisher()
+        service = OpsAlertsService(self.repo, event_publisher=publisher)
+        service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_publish_3",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_pub_dedup",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        deduped = service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_publish_4",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_pub_dedup",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(deduped["result"], "deduped")
+        self.assertEqual(len(publisher.events), 1)
+        self.assertEqual(publisher.events[0].event_type, "alert_created")
+
+    def test_publisher_failure_is_isolated_and_does_not_break_core_flow(self) -> None:
+        service = OpsAlertsService(self.repo, event_publisher=FailingEventPublisher())
+
+        created = service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_publish_5",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "open",
+            }
+        )
+        resolved = service.resolve_ops_alert(
+            tenant_id="tenant_a",
+            ops_alert_id="svc_alert_publish_5",
+            resolved_at="2026-03-26T03:10:00Z",
+        )
+
+        self.assertEqual(created["result"], "created")
+        self.assertTrue(resolved)
+        stored = self.repo.get_alert_by_id("tenant_a", "svc_alert_publish_5")
+        self.assertEqual(stored["status"], "resolved")
+
+
+class SpyEventPublisher:
+    def __init__(self) -> None:
+        self.events: list[InternalEvent] = []
+
+    def publish(self, event: InternalEvent) -> EventPublishResult:
+        self.events.append(event)
+        return EventPublishResult(success=True, message="published")
+
+
+class FailingEventPublisher:
+    def publish(self, event: InternalEvent) -> EventPublishResult:
+        raise RuntimeError("publisher failed")
+=======
+>>>>>>> siddhu6064

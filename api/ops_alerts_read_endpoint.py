@@ -46,7 +46,18 @@ def list_ops_alerts(
             },
         )
 
-    return (200, {"success": True, "data": data})
+    return (
+        200,
+        {
+            "success": True,
+            "data": data["alerts"],
+            "meta": {
+                "tenant_id": data["tenant_id"],
+                "pagination": data["pagination"],
+                "filters": data["filters"],
+            },
+        },
+    )
 
 
 def get_ops_alert(tenant_id: str | None, ops_alert_id: str, db: DatabaseConnection) -> tuple[int, dict[str, Any]]:

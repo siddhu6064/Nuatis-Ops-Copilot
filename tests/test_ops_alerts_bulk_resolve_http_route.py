@@ -67,10 +67,10 @@ class OpsAlertsBulkResolveHttpRouteTests(unittest.TestCase):
         )
 
         self.assertTrue(status.startswith("200"))
-        self.assertEqual(response["data"]["requested_count"], 2)
-        self.assertEqual(response["data"]["resolved_count"], 2)
-        self.assertEqual(response["data"]["already_resolved_count"], 0)
-        self.assertEqual(response["data"]["not_found_count"], 0)
+        self.assertEqual(response["meta"]["requested_count"], 2)
+        self.assertEqual(response["meta"]["resolved_count"], 2)
+        self.assertEqual(response["meta"]["already_resolved_count"], 0)
+        self.assertEqual(response["meta"]["not_found_count"], 0)
 
     def test_duplicate_ids_are_tolerated_safely(self) -> None:
         self.seed_alert("bulk_dup", "tenant_a")
@@ -84,9 +84,9 @@ class OpsAlertsBulkResolveHttpRouteTests(unittest.TestCase):
         )
 
         self.assertTrue(status.startswith("200"))
-        self.assertEqual(response["data"]["requested_count"], 2)
-        self.assertEqual(response["data"]["resolved_count"], 1)
-        self.assertEqual(response["data"]["not_found_count"], 0)
+        self.assertEqual(response["meta"]["requested_count"], 2)
+        self.assertEqual(response["meta"]["resolved_count"], 1)
+        self.assertEqual(response["meta"]["not_found_count"], 0)
 
     def test_already_resolved_alert_remains_idempotent(self) -> None:
         self.seed_alert("bulk_r1", "tenant_a", status="resolved")
@@ -100,8 +100,8 @@ class OpsAlertsBulkResolveHttpRouteTests(unittest.TestCase):
         )
 
         self.assertTrue(status.startswith("200"))
-        self.assertEqual(response["data"]["resolved_count"], 0)
-        self.assertEqual(response["data"]["already_resolved_count"], 1)
+        self.assertEqual(response["meta"]["resolved_count"], 0)
+        self.assertEqual(response["meta"]["already_resolved_count"], 1)
 
     def test_another_tenants_alert_is_not_affected(self) -> None:
         self.seed_alert("bulk_cross", "tenant_b")
@@ -115,7 +115,7 @@ class OpsAlertsBulkResolveHttpRouteTests(unittest.TestCase):
         )
 
         self.assertTrue(status.startswith("200"))
-        self.assertEqual(response["data"]["not_found_count"], 1)
+        self.assertEqual(response["meta"]["not_found_count"], 1)
 
         tenant_b_alert = self.repo.get_alert_by_id("tenant_b", "bulk_cross")
         self.assertEqual(tenant_b_alert["status"], "open")
@@ -130,8 +130,8 @@ class OpsAlertsBulkResolveHttpRouteTests(unittest.TestCase):
         )
 
         self.assertTrue(status.startswith("200"))
-        self.assertEqual(response["data"]["resolved_count"], 0)
-        self.assertEqual(response["data"]["not_found_count"], 1)
+        self.assertEqual(response["meta"]["resolved_count"], 0)
+        self.assertEqual(response["meta"]["not_found_count"], 1)
 
     def test_invalid_request_body_returns_400(self) -> None:
         status, response = self.call_post(

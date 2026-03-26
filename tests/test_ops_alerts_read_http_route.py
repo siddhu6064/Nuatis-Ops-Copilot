@@ -64,9 +64,9 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
 
         self.assertTrue(status.startswith("200"))
         self.assertTrue(response["success"])
-        self.assertEqual(response["data"]["tenant_id"], "tenant_a")
-        self.assertEqual(len(response["data"]["alerts"]), 1)
-        self.assertEqual(response["data"]["alerts"][0]["ops_alert_id"], "alert_1")
+        self.assertEqual(response["meta"]["tenant_id"], "tenant_a")
+        self.assertEqual(len(response["data"]), 1)
+        self.assertEqual(response["data"][0]["ops_alert_id"], "alert_1")
 
     def test_get_alert_by_id_success(self) -> None:
         self.repo.create_alert(
@@ -146,8 +146,8 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
         )
 
         self.assertTrue(alpha_list_status.startswith("200"))
-        self.assertEqual(len(alpha_list_response["data"]["alerts"]), 1)
-        self.assertEqual(alpha_list_response["data"]["alerts"][0]["ops_alert_id"], "alert_5")
+        self.assertEqual(len(alpha_list_response["data"]), 1)
+        self.assertEqual(alpha_list_response["data"][0]["ops_alert_id"], "alert_5")
 
         self.assertTrue(beta_get_status.startswith("200"))
         self.assertEqual(beta_get_response["data"]["tenant_id"], "tenant_beta")
@@ -179,10 +179,10 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
         )
 
         self.assertTrue(status.startswith("200"))
-        self.assertEqual(len(response["data"]["alerts"]), 1)
-        self.assertEqual(response["data"]["alerts"][0]["ops_alert_id"], "alert_7")
-        self.assertEqual(response["data"]["pagination"]["limit"], 1)
-        self.assertEqual(response["data"]["pagination"]["offset"], 0)
+        self.assertEqual(len(response["data"]), 1)
+        self.assertEqual(response["data"][0]["ops_alert_id"], "alert_7")
+        self.assertEqual(response["meta"]["pagination"]["limit"], 1)
+        self.assertEqual(response["meta"]["pagination"]["offset"], 0)
 
     def test_invalid_query_params_return_400(self) -> None:
         status, response = self.call_get("/internal/alerts", "tenant_id=tenant_a&limit=bad")
@@ -209,7 +209,7 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
         status, response = self.call_get("/internal/alerts", "tenant_id=tenant_a&limit=999")
 
         self.assertTrue(status.startswith("200"))
-        self.assertEqual(response["data"]["pagination"]["limit"], 200)
+        self.assertEqual(response["meta"]["pagination"]["limit"], 200)
 
     def test_status_filter_open_and_resolved_return_expected_rows(self) -> None:
         self.repo.create_alert(
@@ -235,12 +235,12 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
         )
 
         self.assertTrue(open_status.startswith("200"))
-        self.assertEqual(len(open_response["data"]["alerts"]), 1)
-        self.assertEqual(open_response["data"]["alerts"][0]["ops_alert_id"], "alert_9")
+        self.assertEqual(len(open_response["data"]), 1)
+        self.assertEqual(open_response["data"][0]["ops_alert_id"], "alert_9")
 
         self.assertTrue(resolved_status.startswith("200"))
-        self.assertEqual(len(resolved_response["data"]["alerts"]), 1)
-        self.assertEqual(resolved_response["data"]["alerts"][0]["ops_alert_id"], "alert_10")
+        self.assertEqual(len(resolved_response["data"]), 1)
+        self.assertEqual(resolved_response["data"][0]["ops_alert_id"], "alert_10")
 
 
     def test_invalid_created_after_returns_400(self) -> None:
@@ -277,12 +277,12 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
         asc_status, asc_response = self.call_get("/internal/alerts", "tenant_id=tenant_a&sort_order=asc")
 
         self.assertTrue(desc_status.startswith("200"))
-        self.assertEqual(desc_response["data"]["alerts"][0]["ops_alert_id"], "alert_b")
-        self.assertEqual(desc_response["data"]["alerts"][1]["ops_alert_id"], "alert_a")
+        self.assertEqual(desc_response["data"][0]["ops_alert_id"], "alert_b")
+        self.assertEqual(desc_response["data"][1]["ops_alert_id"], "alert_a")
 
         self.assertTrue(asc_status.startswith("200"))
-        self.assertEqual(asc_response["data"]["alerts"][0]["ops_alert_id"], "alert_a")
-        self.assertEqual(asc_response["data"]["alerts"][1]["ops_alert_id"], "alert_b")
+        self.assertEqual(asc_response["data"][0]["ops_alert_id"], "alert_a")
+        self.assertEqual(asc_response["data"][1]["ops_alert_id"], "alert_b")
 
 
     def test_read_path_returns_resolved_by_metadata_when_present(self) -> None:
@@ -301,7 +301,7 @@ class OpsAlertsReadHttpRouteTests(unittest.TestCase):
         get_status, get_response = self.call_get("/internal/alerts/alert_11", "tenant_id=tenant_a")
 
         self.assertTrue(list_status.startswith("200"))
-        self.assertEqual(list_response["data"]["alerts"][0]["resolved_by"], "ops_user_1")
+        self.assertEqual(list_response["data"][0]["resolved_by"], "ops_user_1")
 
         self.assertTrue(get_status.startswith("200"))
         self.assertEqual(get_response["data"]["resolved_by"], "ops_user_1")

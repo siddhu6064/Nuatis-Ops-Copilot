@@ -75,4 +75,16 @@ def bulk_resolve_ops_alerts(payload: dict[str, Any], db: DatabaseConnection) -> 
             },
         )
 
-    return (200, {"success": True, "data": data})
+    return (
+        200,
+        {
+            "success": True,
+            "data": data["results"],
+            "meta": {
+                "requested_count": data["requested_count"],
+                "resolved_count": data["resolved_count"],
+                "already_resolved_count": data["already_resolved_count"],
+                "not_found_count": data["not_found_count"],
+            },
+        },
+    )

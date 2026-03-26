@@ -79,3 +79,9 @@ def get_ops_alert(tenant_id: str | None, ops_alert_id: str, db: DatabaseConnecti
         )
 
     return (200, {"success": True, "data": alert})
+
+
+def get_ops_alert_detail(
+    tenant_id: str | None, ops_alert_id: str, db: DatabaseConnection
+) -> tuple[int, dict[str, Any]]:
+    return get_ops_alert(tenant_id=tenant_id, ops_alert_id=ops_alert_id, db=db)

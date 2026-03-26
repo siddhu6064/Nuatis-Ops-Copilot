@@ -72,6 +72,68 @@ class OpsAlertsService:
             resolved_by=resolved_by,
         )
 
+    def bulk_resolve_ops_alerts(
+        self,
+        *,
+        tenant_id: str,
+        ops_alert_ids: list[str],
+        resolved_at: str | None = None,
+        resolved_by: str | None = None,
+    ) -> dict[str, Any]:
+        if not tenant_id:
+            raise ValueError("tenant_id is required")
+        if not isinstance(ops_alert_ids, list) or len(ops_alert_ids) == 0:
+            raise ValueError("ops_alert_ids must be a non-empty list.")
+
+        normalized_ids: list[str] = []
+        for ops_alert_id in ops_alert_ids:
+            if not isinstance(ops_alert_id, str) or ops_alert_id.strip() == "":
+                raise ValueError("ops_alert_ids must contain non-empty strings.")
+            normalized_ids.append(ops_alert_id)
+
+        if resolved_at is not None and not is_valid_iso8601(resolved_at):
+            raise ValueError("resolved_at must be a valid ISO-8601 timestamp.")
+        if resolved_by is not None and not isinstance(resolved_by, str):
+            raise ValueError("resolved_by must be a string when provided.")
+        if isinstance(resolved_by, str) and resolved_by.strip() == "":
+            raise ValueError("resolved_by must be a non-empty string when provided.")
+
+        timestamp = resolved_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        unique_ids = list(dict.fromkeys(normalized_ids))
+
+        resolved_count = 0
+        already_resolved_count = 0
+        not_found_count = 0
+        results: list[dict[str, str]] = []
+
+        for ops_alert_id in unique_ids:
+            existing = self._repository.get_alert_by_id(tenant_id, ops_alert_id)
+            if existing is None:
+                not_found_count += 1
+                results.append({"ops_alert_id": ops_alert_id, "result": "not_found"})
+                continue
+
+            self._repository.resolve_alert(
+                tenant_id=tenant_id,
+                ops_alert_id=ops_alert_id,
+                resolved_at=timestamp,
+                resolved_by=resolved_by,
+            )
+            if existing["status"] == "resolved":
+                already_resolved_count += 1
+                results.append({"ops_alert_id": ops_alert_id, "result": "already_resolved"})
+            else:
+                resolved_count += 1
+                results.append({"ops_alert_id": ops_alert_id, "result": "resolved"})
+
+        return {
+            "requested_count": len(normalized_ids),
+            "resolved_count": resolved_count,
+            "already_resolved_count": already_resolved_count,
+            "not_found_count": not_found_count,
+            "results": results,
+        }
+
     def _find_dedup_candidate(self, alert_data: dict[str, Any]) -> dict[str, Any] | None:
         if alert_data.get("status") != "open":
             return None

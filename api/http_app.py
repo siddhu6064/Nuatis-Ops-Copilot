@@ -9,8 +9,8 @@ from urllib.parse import parse_qs
 from wsgiref.simple_server import make_server
 
 from api.activity_events_endpoint import ENDPOINT_PATH, ingest_activity_event
-from api.ops_alerts_read_endpoint import get_ops_alert, list_ops_alerts
-from api.ops_alerts_resolve_endpoint import resolve_ops_alert
+from api.ops_alerts_read_endpoint import get_ops_alert, get_ops_alert_detail, list_ops_alerts
+from api.ops_alerts_resolve_endpoint import bulk_resolve_ops_alerts, resolve_ops_alert
 from db.connection import DatabaseConnection, connect, disconnect
 
 
@@ -84,6 +84,29 @@ def create_app(db: DatabaseConnection) -> Callable[[dict[str, Any], StartRespons
             )
             return _json_response(status_code, response, start_response)
 
+        if method == "POST" and path == "/internal/alerts/resolve/bulk":
+            body_length = int(environ.get("CONTENT_LENGTH") or 0)
+            raw_body = environ.get("wsgi.input", BytesIO()).read(body_length)
+            try:
+                payload = json.loads(raw_body.decode("utf-8") or "{}")
+                if not isinstance(payload, dict):
+                    raise ValueError("Payload must be a JSON object")
+            except (json.JSONDecodeError, ValueError):
+                return _json_response(
+                    400,
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "validation_error",
+                            "message": "Request body must be a valid JSON object.",
+                        },
+                    },
+                    start_response,
+                )
+
+            status_code, response = bulk_resolve_ops_alerts(payload, db)
+            return _json_response(status_code, response, start_response)
+
         if method == "GET" and path == "/internal/alerts":
             tenant_id = query_params.get("tenant_id", [None])[0]
             status_code, response = list_ops_alerts(
@@ -96,6 +119,12 @@ def create_app(db: DatabaseConnection) -> Callable[[dict[str, Any], StartRespons
                 created_before=query_params.get("created_before", [None])[0],
                 sort_order=query_params.get("sort_order", [None])[0],
             )
+            return _json_response(status_code, response, start_response)
+
+        if method == "GET" and path.startswith("/internal/alerts/") and path.endswith("/detail"):
+            tenant_id = query_params.get("tenant_id", [None])[0]
+            ops_alert_id = path.split("/internal/alerts/", 1)[1].rsplit("/detail", 1)[0]
+            status_code, response = get_ops_alert_detail(tenant_id, ops_alert_id, db)
             return _json_response(status_code, response, start_response)
 
         if method == "GET" and path.startswith("/internal/alerts/"):

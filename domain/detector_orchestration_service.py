@@ -8,10 +8,12 @@ from typing import Any
 from domain.detector_contracts import Detector
 from domain.ops_alerts_service import OpsAlertsService
 from workers.detectors.booking_failure_high_severity_detector import BookingFailureHighSeverityDetector
+from workers.detectors.call_failure_high_severity_detector import CallFailureHighSeverityDetector
 
 
 DETECTOR_REGISTRY: list[tuple[str, Detector]] = [
     ("booking_failure_high_severity", BookingFailureHighSeverityDetector()),
+    ("call_failure_high_severity", CallFailureHighSeverityDetector()),
 ]
 
 

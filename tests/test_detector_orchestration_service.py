@@ -36,12 +36,13 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(summary["detectors_run"], 1)
+        self.assertEqual(summary["detectors_run"], 2)
         self.assertEqual(summary["matches"], 1)
         self.assertEqual(summary["alerts_created"], 1)
         self.assertEqual(summary["alerts_deduped"], 0)
         self.assertEqual(summary["results"][0]["result"], "matched_created")
         self.assertEqual(summary["results"][0]["outcome"], "created")
+        self.assertEqual(summary["results"][1]["result"], "no_match")
 
         alert_id = summary["results"][0]["ops_alert_id"]
         stored = self.repo.get_alert_by_id("tenant_a", alert_id)
@@ -60,12 +61,13 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(summary["detectors_run"], 1)
+        self.assertEqual(summary["detectors_run"], 2)
         self.assertEqual(summary["matches"], 0)
         self.assertEqual(summary["alerts_created"], 0)
         self.assertEqual(summary["alerts_deduped"], 0)
         self.assertEqual(summary["results"][0]["result"], "no_match")
         self.assertEqual(summary["results"][0]["outcome"], "no_match")
+        self.assertEqual(summary["results"][1]["result"], "no_match")
 
     def test_detector_returning_none_creates_no_alert(self) -> None:
         class NoopDetector:
@@ -174,6 +176,30 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
         self.assertEqual(second["alerts_created"], 0)
         self.assertEqual(second["alerts_deduped"], 1)
         self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 1)
+
+    def test_orchestration_with_both_detectors_only_call_detector_creates_alert(self) -> None:
+        summary = self.orchestrator.evaluate_event(
+            {
+                "activity_event_id": "or_act_call_1",
+                "tenant_id": "tenant_call",
+                "event_id": "evt_call_1",
+                "event_type": "call.failed",
+                "payload_json": '{"severity":"high"}',
+            }
+        )
+
+        self.assertEqual(summary["detectors_run"], 2)
+        self.assertEqual(summary["matches"], 1)
+        self.assertEqual(summary["alerts_created"], 1)
+        self.assertEqual(summary["results"][0]["outcome"], "no_match")
+        self.assertEqual(summary["results"][1]["outcome"], "created")
+
+        alert_id = summary["results"][1]["ops_alert_id"]
+        stored = self.repo.get_alert_by_id("tenant_call", alert_id)
+        self.assertIsNotNone(stored)
+        details = json.loads(stored["details_json"])
+        self.assertEqual(stored["alert_type"], "call_failure_high_severity")
+        self.assertEqual(details["detector_name"], "call_failure_high_severity")
 
     def test_multiple_detectors_only_matching_detector_fires(self) -> None:
         class NoopDetector:

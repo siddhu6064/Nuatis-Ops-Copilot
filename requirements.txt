@@ -1,0 +1,2 @@
+# This project currently uses Python standard library modules only.
+# The file exists so CI dependency resolution/caching hooks have a stable path.

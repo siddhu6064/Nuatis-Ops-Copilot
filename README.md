@@ -202,6 +202,9 @@ python -m unittest discover -s tests -v
 
 Do not use `python -m unittest` by itself in this repository; it may not discover the test suite.
 
+CI note:
+- GitHub Actions workflow `.github/workflows/ci.yml` runs this same canonical command on push and pull requests.
+
 ## Intentionally not implemented yet
 - robust notification delivery features (retries, backoff, dead-lettering)
 - websocket streaming

@@ -136,6 +136,16 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
 ### Dedup behavior after resolution
 - Dedup only blocks when an **open** alert exists for the dedup key.
 - After an alert is resolved, a new alert with the same dedup key can be created.
+- Concurrency hardening (current scope):
+  - DB migration `0005_add_ops_alerts_booking_open_dedup_unique_index.sql` adds a unique
+    partial index for `booking_failure_high_severity` open alerts on
+    `(tenant_id, alert_type, source_event_id)`.
+  - This closes the basic check-then-insert race where concurrent writers could otherwise
+    both pass pre-insert dedup lookup.
+  - Service-level behavior translates an insert uniqueness conflict on this path back into
+    a deduped result when an open matching alert is found after conflict.
+  - This is a single-database safety improvement only; distributed/global exactly-once
+    semantics are intentionally not implemented yet.
 
 ### Dedup rule currently implemented
 For `booking_failure_high_severity` alerts only:
@@ -152,6 +162,8 @@ For `booking_failure_high_severity` alerts only:
 - `db/migrations/0001_create_activity_events.sql`
 - `db/migrations/0002_create_ops_alerts.sql`
 - `db/migrations/0003_add_ops_alerts_dedup_open_lookup_index.sql`
+- `db/migrations/0004_add_resolved_by_to_ops_alerts.sql`
+- `db/migrations/0005_add_ops_alerts_booking_open_dedup_unique_index.sql`
 
 Both schemas are tenant-scoped and designed for incremental lifecycle expansion.
 

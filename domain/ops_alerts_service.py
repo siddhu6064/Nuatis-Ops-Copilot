@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import sqlite3
 from typing import Any
 
 from domain.internal_event_contracts import EventPublishResult, InternalEvent, InternalEventPublisher
@@ -43,7 +44,18 @@ class OpsAlertsService:
                 "result": "deduped",
             }
 
-        self._repository.create_alert(alert_data)
+        try:
+            self._repository.create_alert(alert_data)
+        except sqlite3.IntegrityError:
+            dedup_candidate = self._find_dedup_candidate(alert_data)
+            if dedup_candidate is not None:
+                return {
+                    "ops_alert_id": dedup_candidate["ops_alert_id"],
+                    "tenant_id": dedup_candidate["tenant_id"],
+                    "status": dedup_candidate["status"],
+                    "result": "deduped",
+                }
+            raise
         self._publish_internal_event(
             InternalEvent(
                 event_type="alert_created",

@@ -1,3 +1,4 @@
+import sqlite3
 import unittest
 from pathlib import Path
 
@@ -319,6 +320,45 @@ class OpsAlertsServiceTests(unittest.TestCase):
         self.assertTrue(resolved)
         stored = self.repo.get_alert_by_id("tenant_a", "svc_alert_publish_5")
         self.assertEqual(stored["status"], "resolved")
+
+    def test_create_ops_alert_returns_deduped_when_insert_conflicts_after_race(self) -> None:
+        class RaceRepository:
+            def __init__(self) -> None:
+                self.lookup_calls = 0
+
+            def find_open_alert_by_dedup_key(
+                self,
+                *,
+                tenant_id: str,
+                alert_type: str,
+                source_event_id: str,
+            ) -> dict | None:
+                self.lookup_calls += 1
+                if self.lookup_calls == 1:
+                    return None
+                return {
+                    "ops_alert_id": "svc_alert_race_existing",
+                    "tenant_id": tenant_id,
+                    "status": "open",
+                }
+
+            def create_alert(self, alert: dict) -> None:
+                raise sqlite3.IntegrityError("UNIQUE constraint failed")
+
+        service = OpsAlertsService(RaceRepository())  # type: ignore[arg-type]
+
+        result = service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_race_new",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_race",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(result["result"], "deduped")
+        self.assertEqual(result["ops_alert_id"], "svc_alert_race_existing")
 
 
 class SpyEventPublisher:

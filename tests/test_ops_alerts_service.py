@@ -35,6 +35,7 @@ class OpsAlertsServiceTests(unittest.TestCase):
 
         self.assertEqual(result["ops_alert_id"], "svc_alert_1")
         self.assertEqual(result["result"], "created")
+        self.assertEqual(result["outcome_reason"], "created_inserted")
         stored = self.repo.get_alert_by_id("tenant_a", "svc_alert_1")
         self.assertIsNotNone(stored)
 
@@ -137,6 +138,7 @@ class OpsAlertsServiceTests(unittest.TestCase):
 
         self.assertEqual(first["result"], "created")
         self.assertEqual(second["result"], "deduped")
+        self.assertEqual(second["outcome_reason"], "dedup_preinsert_match")
         self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 1)
 
     def test_dedup_allows_different_tenant_and_source_event(self) -> None:
@@ -201,6 +203,7 @@ class OpsAlertsServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(created_again["result"], "created")
+        self.assertEqual(created_again["outcome_reason"], "created_inserted")
         self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 2)
 
     def test_resolving_already_resolved_alert_is_idempotent_success(self) -> None:
@@ -359,6 +362,7 @@ class OpsAlertsServiceTests(unittest.TestCase):
 
         self.assertEqual(result["result"], "deduped")
         self.assertEqual(result["ops_alert_id"], "svc_alert_race_existing")
+        self.assertEqual(result["outcome_reason"], "dedup_postinsert_conflict")
 
     def test_call_dedup_prevents_second_open_alert_same_key(self) -> None:
         first = self.service.create_ops_alert(
@@ -382,6 +386,7 @@ class OpsAlertsServiceTests(unittest.TestCase):
 
         self.assertEqual(first["result"], "created")
         self.assertEqual(second["result"], "deduped")
+        self.assertEqual(second["outcome_reason"], "dedup_preinsert_match")
         self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 1)
 
     def test_call_create_returns_deduped_when_insert_conflicts_after_race(self) -> None:
@@ -422,6 +427,7 @@ class OpsAlertsServiceTests(unittest.TestCase):
 
         self.assertEqual(result["result"], "deduped")
         self.assertEqual(result["ops_alert_id"], "svc_call_alert_race_existing")
+        self.assertEqual(result["outcome_reason"], "dedup_postinsert_conflict")
 
 
 class SpyEventPublisher:

@@ -43,6 +43,7 @@ class OpsAlertsService:
                 "tenant_id": dedup_candidate["tenant_id"],
                 "status": dedup_candidate["status"],
                 "result": "deduped",
+                "outcome_reason": "dedup_preinsert_match",
             }
 
         try:
@@ -55,6 +56,7 @@ class OpsAlertsService:
                     "tenant_id": dedup_candidate["tenant_id"],
                     "status": dedup_candidate["status"],
                     "result": "deduped",
+                    "outcome_reason": "dedup_postinsert_conflict",
                 }
             raise
         self._publish_internal_event(
@@ -76,6 +78,7 @@ class OpsAlertsService:
             "tenant_id": alert_data["tenant_id"],
             "status": alert_data["status"],
             "result": "created",
+            "outcome_reason": "created_inserted",
         }
 
     def get_ops_alert(self, *, tenant_id: str, ops_alert_id: str) -> dict[str, Any] | None:

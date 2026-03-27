@@ -42,6 +42,7 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
         self.assertEqual(summary["alerts_deduped"], 0)
         self.assertEqual(summary["results"][0]["result"], "matched_created")
         self.assertEqual(summary["results"][0]["outcome"], "created")
+        self.assertEqual(summary["results"][0]["create_outcome_reason"], "created_inserted")
         self.assertEqual(summary["results"][1]["result"], "no_match")
 
         alert_id = summary["results"][0]["ops_alert_id"]
@@ -173,6 +174,7 @@ class DetectorOrchestrationServiceTests(unittest.TestCase):
 
         self.assertEqual(first["results"][0]["result"], "matched_created")
         self.assertEqual(second["results"][0]["result"], "matched_deduped")
+        self.assertEqual(second["results"][0]["create_outcome_reason"], "dedup_preinsert_match")
         self.assertEqual(second["alerts_created"], 0)
         self.assertEqual(second["alerts_deduped"], 1)
         self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 1)

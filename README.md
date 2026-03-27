@@ -34,6 +34,7 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
   - `BookingFailureHighSeverityDetector`
     - Rule: match `event_type == "booking.failed"` and payload severity `"high"`.
     - On match, creates one ops alert or dedups against an existing open alert.
+  - Result metadata now includes `create_outcome_reason` for matched created/deduped outcomes.
 
 ### Notifications (minimal webhook foundation)
 - Notifications are best-effort and synchronous.
@@ -149,6 +150,11 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
     a deduped result when an open matching alert is found after conflict.
   - This is a single-database safety improvement only; distributed/global exactly-once
     semantics are intentionally not implemented yet.
+  - Create outcome markers currently used internally:
+    - `created_inserted`
+    - `dedup_preinsert_match`
+    - `dedup_postinsert_conflict` (dedup by concurrent insert race translation)
+    - unexpected integrity errors still propagate if no dedup candidate is found after conflict.
 
 ### Dedup rule currently implemented
 For `booking_failure_high_severity` and `call_failure_high_severity` alerts:

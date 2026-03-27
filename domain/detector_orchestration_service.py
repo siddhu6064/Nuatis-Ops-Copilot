@@ -83,6 +83,7 @@ class DetectorOrchestrationService:
                 result["outcome"] = "created" if is_created else "deduped"
                 result["ops_alert_id"] = create_result["ops_alert_id"]
                 result["alert_type"] = detector_result.alert_type
+                result["create_outcome_reason"] = create_result.get("outcome_reason")
                 matches += 1
                 if is_created:
                     alerts_created += 1

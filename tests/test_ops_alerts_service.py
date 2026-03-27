@@ -1,0 +1,444 @@
+import sqlite3
+import unittest
+from pathlib import Path
+
+from db.connection import connect, disconnect
+from domain.internal_event_contracts import EventPublishResult, InternalEvent
+from domain.ops_alerts_service import OpsAlertsService
+from repositories.ops_alerts_repository import OpsAlertsRepository
+
+
+MIGRATION_PATH = Path("db/migrations/0002_create_ops_alerts.sql")
+MIGRATION_0004_PATH = Path("db/migrations/0004_add_resolved_by_to_ops_alerts.sql")
+
+
+class OpsAlertsServiceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.db = connect("sqlite:///:memory:")
+        self.db.connection.executescript(MIGRATION_PATH.read_text())
+        self.db.connection.executescript(MIGRATION_0004_PATH.read_text())
+        self.repo = OpsAlertsRepository(self.db)
+        self.service = OpsAlertsService(self.repo)
+
+    def tearDown(self) -> None:
+        disconnect(self.db)
+
+    def test_create_ops_alert_success(self) -> None:
+        result = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_1",
+                "tenant_id": "tenant_a",
+                "alert_type": "booking_failure",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(result["ops_alert_id"], "svc_alert_1")
+        self.assertEqual(result["result"], "created")
+        self.assertEqual(result["outcome_reason"], "created_inserted")
+        stored = self.repo.get_alert_by_id("tenant_a", "svc_alert_1")
+        self.assertIsNotNone(stored)
+
+    def test_resolve_ops_alert_success(self) -> None:
+        self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_2",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "open",
+            }
+        )
+
+        resolved = self.service.resolve_ops_alert(
+            tenant_id="tenant_a",
+            ops_alert_id="svc_alert_2",
+            resolved_at="2026-03-25T23:00:00Z",
+        )
+
+        self.assertTrue(resolved)
+        stored = self.repo.get_alert_by_id("tenant_a", "svc_alert_2")
+        self.assertEqual(stored["status"], "resolved")
+
+    def test_resolve_ops_alert_missing_row_returns_false(self) -> None:
+        resolved = self.service.resolve_ops_alert(
+            tenant_id="tenant_x",
+            ops_alert_id="missing_alert",
+            resolved_at="2026-03-25T23:05:00Z",
+        )
+
+        self.assertFalse(resolved)
+
+    def test_tenant_scoped_behavior_is_preserved(self) -> None:
+        self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_3",
+                "tenant_id": "tenant_a",
+                "alert_type": "stale_contact",
+                "status": "open",
+            }
+        )
+
+        wrong_tenant_resolve = self.service.resolve_ops_alert(
+            tenant_id="tenant_b",
+            ops_alert_id="svc_alert_3",
+            resolved_at="2026-03-25T23:10:00Z",
+        )
+
+        self.assertFalse(wrong_tenant_resolve)
+        tenant_a_alert = self.repo.get_alert_by_id("tenant_a", "svc_alert_3")
+        self.assertEqual(tenant_a_alert["status"], "open")
+        tenant_b_alert = self.repo.get_alert_by_id("tenant_b", "svc_alert_3")
+        self.assertIsNone(tenant_b_alert)
+
+    def test_required_input_handling_is_covered(self) -> None:
+        with self.assertRaises(ValueError):
+            self.service.create_ops_alert(
+                {
+                    "ops_alert_id": "svc_alert_4",
+                    "alert_type": "booking_failure",
+                    "status": "open",
+                }
+            )
+
+        with self.assertRaises(ValueError):
+            self.service.resolve_ops_alert(
+                tenant_id="",
+                ops_alert_id="svc_alert_4",
+                resolved_at="2026-03-25T23:20:00Z",
+            )
+        with self.assertRaises(ValueError):
+            self.service.create_ops_alert(
+                {
+                    "ops_alert_id": "svc_alert_bad_status",
+                    "tenant_id": "tenant_a",
+                    "alert_type": "booking_failure",
+                    "status": "closed",
+                }
+            )
+
+    def test_dedup_prevents_second_open_alert_same_key(self) -> None:
+        first = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_5",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_dup",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+        second = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_6",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_dup",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(first["result"], "created")
+        self.assertEqual(second["result"], "deduped")
+        self.assertEqual(second["outcome_reason"], "dedup_preinsert_match")
+        self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 1)
+
+    def test_dedup_allows_different_tenant_and_source_event(self) -> None:
+        self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_7",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_same",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        diff_tenant = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_8",
+                "tenant_id": "tenant_b",
+                "source_event_id": "evt_same",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+        diff_source = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_9",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_other",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(diff_tenant["result"], "created")
+        self.assertEqual(diff_source["result"], "created")
+        self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 2)
+        self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_b")), 1)
+
+    def test_resolved_alert_does_not_block_new_alert_same_dedup_key(self) -> None:
+        self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_10",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_reopen",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+        self.service.resolve_ops_alert(
+            tenant_id="tenant_a",
+            ops_alert_id="svc_alert_10",
+            resolved_at="2026-03-26T00:10:00Z",
+        )
+
+        created_again = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_11",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_reopen",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(created_again["result"], "created")
+        self.assertEqual(created_again["outcome_reason"], "created_inserted")
+        self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 2)
+
+    def test_resolving_already_resolved_alert_is_idempotent_success(self) -> None:
+        self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_12",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "open",
+            }
+        )
+
+        first = self.service.resolve_ops_alert(
+            tenant_id="tenant_a",
+            ops_alert_id="svc_alert_12",
+            resolved_at="2026-03-26T00:20:00Z",
+            resolved_by="ops_user_1",
+        )
+        second = self.service.resolve_ops_alert(
+            tenant_id="tenant_a",
+            ops_alert_id="svc_alert_12",
+            resolved_at="2026-03-26T00:21:00Z",
+            resolved_by="ops_user_2",
+        )
+
+        self.assertTrue(first)
+        self.assertTrue(second)
+        stored = self.repo.get_alert_by_id("tenant_a", "svc_alert_12")
+        self.assertEqual(stored["status"], "resolved")
+        self.assertEqual(stored["resolved_at"], "2026-03-26T00:20:00Z")
+        self.assertEqual(stored["resolved_by"], "ops_user_1")
+
+    def test_newly_created_alert_publishes_alert_created_event(self) -> None:
+        publisher = SpyEventPublisher()
+        service = OpsAlertsService(self.repo, event_publisher=publisher)
+
+        result = service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_publish_1",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(result["result"], "created")
+        self.assertEqual(len(publisher.events), 1)
+        self.assertEqual(publisher.events[0].event_type, "alert_created")
+        self.assertEqual(publisher.events[0].payload["ops_alert_id"], "svc_alert_publish_1")
+
+    def test_resolved_alert_publishes_alert_resolved_event(self) -> None:
+        publisher = SpyEventPublisher()
+        service = OpsAlertsService(self.repo, event_publisher=publisher)
+        service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_publish_2",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "open",
+            }
+        )
+
+        resolved = service.resolve_ops_alert(
+            tenant_id="tenant_a",
+            ops_alert_id="svc_alert_publish_2",
+            resolved_at="2026-03-26T03:00:00Z",
+        )
+
+        self.assertTrue(resolved)
+        self.assertEqual([event.event_type for event in publisher.events], ["alert_created", "alert_resolved"])
+
+    def test_deduped_alert_does_not_publish_additional_alert_created_event(self) -> None:
+        publisher = SpyEventPublisher()
+        service = OpsAlertsService(self.repo, event_publisher=publisher)
+        service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_publish_3",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_pub_dedup",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        deduped = service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_publish_4",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_pub_dedup",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(deduped["result"], "deduped")
+        self.assertEqual(len(publisher.events), 1)
+        self.assertEqual(publisher.events[0].event_type, "alert_created")
+
+    def test_publisher_failure_is_isolated_and_does_not_break_core_flow(self) -> None:
+        service = OpsAlertsService(self.repo, event_publisher=FailingEventPublisher())
+
+        created = service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_publish_5",
+                "tenant_id": "tenant_a",
+                "alert_type": "workflow_failure",
+                "status": "open",
+            }
+        )
+        resolved = service.resolve_ops_alert(
+            tenant_id="tenant_a",
+            ops_alert_id="svc_alert_publish_5",
+            resolved_at="2026-03-26T03:10:00Z",
+        )
+
+        self.assertEqual(created["result"], "created")
+        self.assertTrue(resolved)
+        stored = self.repo.get_alert_by_id("tenant_a", "svc_alert_publish_5")
+        self.assertEqual(stored["status"], "resolved")
+
+    def test_create_ops_alert_returns_deduped_when_insert_conflicts_after_race(self) -> None:
+        class RaceRepository:
+            def __init__(self) -> None:
+                self.lookup_calls = 0
+
+            def find_open_alert_by_dedup_key(
+                self,
+                *,
+                tenant_id: str,
+                alert_type: str,
+                source_event_id: str,
+            ) -> dict | None:
+                self.lookup_calls += 1
+                if self.lookup_calls == 1:
+                    return None
+                return {
+                    "ops_alert_id": "svc_alert_race_existing",
+                    "tenant_id": tenant_id,
+                    "status": "open",
+                }
+
+            def create_alert(self, alert: dict) -> None:
+                raise sqlite3.IntegrityError("UNIQUE constraint failed")
+
+        service = OpsAlertsService(RaceRepository())  # type: ignore[arg-type]
+
+        result = service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_alert_race_new",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_race",
+                "alert_type": "booking_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(result["result"], "deduped")
+        self.assertEqual(result["ops_alert_id"], "svc_alert_race_existing")
+        self.assertEqual(result["outcome_reason"], "dedup_postinsert_conflict")
+
+    def test_call_dedup_prevents_second_open_alert_same_key(self) -> None:
+        first = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_call_alert_1",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_call_dup",
+                "alert_type": "call_failure_high_severity",
+                "status": "open",
+            }
+        )
+        second = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_call_alert_2",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_call_dup",
+                "alert_type": "call_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(first["result"], "created")
+        self.assertEqual(second["result"], "deduped")
+        self.assertEqual(second["outcome_reason"], "dedup_preinsert_match")
+        self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 1)
+
+    def test_call_create_returns_deduped_when_insert_conflicts_after_race(self) -> None:
+        class RaceRepository:
+            def __init__(self) -> None:
+                self.lookup_calls = 0
+
+            def find_open_alert_by_dedup_key(
+                self,
+                *,
+                tenant_id: str,
+                alert_type: str,
+                source_event_id: str,
+            ) -> dict | None:
+                self.lookup_calls += 1
+                if self.lookup_calls == 1:
+                    return None
+                return {
+                    "ops_alert_id": "svc_call_alert_race_existing",
+                    "tenant_id": tenant_id,
+                    "status": "open",
+                }
+
+            def create_alert(self, alert: dict) -> None:
+                raise sqlite3.IntegrityError("UNIQUE constraint failed")
+
+        service = OpsAlertsService(RaceRepository())  # type: ignore[arg-type]
+
+        result = service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_call_alert_race_new",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_call_race",
+                "alert_type": "call_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(result["result"], "deduped")
+        self.assertEqual(result["ops_alert_id"], "svc_call_alert_race_existing")
+        self.assertEqual(result["outcome_reason"], "dedup_postinsert_conflict")
+
+
+class SpyEventPublisher:
+    def __init__(self) -> None:
+        self.events: list[InternalEvent] = []
+
+    def publish(self, event: InternalEvent) -> EventPublishResult:
+        self.events.append(event)
+        return EventPublishResult(success=True, message="published")
+
+
+class FailingEventPublisher:
+    def publish(self, event: InternalEvent) -> EventPublishResult:
+        raise RuntimeError("publisher failed")

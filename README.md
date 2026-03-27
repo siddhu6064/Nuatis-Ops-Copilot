@@ -140,6 +140,9 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
   - DB migration `0005_add_ops_alerts_booking_open_dedup_unique_index.sql` adds a unique
     partial index for `booking_failure_high_severity` open alerts on
     `(tenant_id, alert_type, source_event_id)`.
+  - DB migration `0006_add_ops_alerts_call_open_dedup_unique_index.sql` adds the same
+    unique partial index shape for `call_failure_high_severity` open alerts on
+    `(tenant_id, alert_type, source_event_id)`.
   - This closes the basic check-then-insert race where concurrent writers could otherwise
     both pass pre-insert dedup lookup.
   - Service-level behavior translates an insert uniqueness conflict on this path back into
@@ -148,7 +151,7 @@ Nuatis Ops Copilot is a standalone backend service for operational intelligence.
     semantics are intentionally not implemented yet.
 
 ### Dedup rule currently implemented
-For `booking_failure_high_severity` alerts only:
+For `booking_failure_high_severity` and `call_failure_high_severity` alerts:
 - prevent duplicate **open** alerts when all match:
   - `tenant_id`
   - `alert_type`
@@ -164,6 +167,7 @@ For `booking_failure_high_severity` alerts only:
 - `db/migrations/0003_add_ops_alerts_dedup_open_lookup_index.sql`
 - `db/migrations/0004_add_resolved_by_to_ops_alerts.sql`
 - `db/migrations/0005_add_ops_alerts_booking_open_dedup_unique_index.sql`
+- `db/migrations/0006_add_ops_alerts_call_open_dedup_unique_index.sql`
 
 Both schemas are tenant-scoped and designed for incremental lifecycle expansion.
 

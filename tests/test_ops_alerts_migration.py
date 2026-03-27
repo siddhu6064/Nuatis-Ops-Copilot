@@ -8,6 +8,7 @@ MIGRATION_PATH = Path("db/migrations/0002_create_ops_alerts.sql")
 INDEX_MIGRATION_PATH = Path("db/migrations/0003_add_ops_alerts_dedup_open_lookup_index.sql")
 RESOLVED_BY_MIGRATION_PATH = Path("db/migrations/0004_add_resolved_by_to_ops_alerts.sql")
 DEDUP_UNIQUE_MIGRATION_PATH = Path("db/migrations/0005_add_ops_alerts_booking_open_dedup_unique_index.sql")
+CALL_DEDUP_UNIQUE_MIGRATION_PATH = Path("db/migrations/0006_add_ops_alerts_call_open_dedup_unique_index.sql")
 
 
 class OpsAlertsMigrationTests(unittest.TestCase):
@@ -32,6 +33,9 @@ class OpsAlertsMigrationTests(unittest.TestCase):
 
     def apply_dedup_unique_migration(self) -> None:
         self.conn.executescript(DEDUP_UNIQUE_MIGRATION_PATH.read_text())
+
+    def apply_call_dedup_unique_migration(self) -> None:
+        self.conn.executescript(CALL_DEDUP_UNIQUE_MIGRATION_PATH.read_text())
 
     def test_migration_applies_successfully(self) -> None:
         self.apply_migration()
@@ -195,6 +199,47 @@ class OpsAlertsMigrationTests(unittest.TestCase):
                     "tenant_alpha",
                     "evt_uq_1",
                     "booking_failure_high_severity",
+                    "open",
+                ),
+            )
+
+    def test_call_open_dedup_unique_index_applies_and_blocks_duplicates(self) -> None:
+        self.apply_migration()
+        self.apply_call_dedup_unique_migration()
+
+        row = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='uq_ops_alerts_call_open_dedup'"
+        ).fetchone()
+        self.assertIsNotNone(row)
+
+        self.conn.execute(
+            """
+            INSERT INTO ops_alerts (
+                ops_alert_id, tenant_id, source_event_id, alert_type, status
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "alert_call_uq_1",
+                "tenant_alpha",
+                "evt_call_uq_1",
+                "call_failure_high_severity",
+                "open",
+            ),
+        )
+        self.conn.commit()
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.conn.execute(
+                """
+                INSERT INTO ops_alerts (
+                    ops_alert_id, tenant_id, source_event_id, alert_type, status
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "alert_call_uq_2",
+                    "tenant_alpha",
+                    "evt_call_uq_1",
+                    "call_failure_high_severity",
                     "open",
                 ),
             )

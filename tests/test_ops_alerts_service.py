@@ -360,6 +360,69 @@ class OpsAlertsServiceTests(unittest.TestCase):
         self.assertEqual(result["result"], "deduped")
         self.assertEqual(result["ops_alert_id"], "svc_alert_race_existing")
 
+    def test_call_dedup_prevents_second_open_alert_same_key(self) -> None:
+        first = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_call_alert_1",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_call_dup",
+                "alert_type": "call_failure_high_severity",
+                "status": "open",
+            }
+        )
+        second = self.service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_call_alert_2",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_call_dup",
+                "alert_type": "call_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(first["result"], "created")
+        self.assertEqual(second["result"], "deduped")
+        self.assertEqual(len(self.repo.list_alerts_by_tenant("tenant_a")), 1)
+
+    def test_call_create_returns_deduped_when_insert_conflicts_after_race(self) -> None:
+        class RaceRepository:
+            def __init__(self) -> None:
+                self.lookup_calls = 0
+
+            def find_open_alert_by_dedup_key(
+                self,
+                *,
+                tenant_id: str,
+                alert_type: str,
+                source_event_id: str,
+            ) -> dict | None:
+                self.lookup_calls += 1
+                if self.lookup_calls == 1:
+                    return None
+                return {
+                    "ops_alert_id": "svc_call_alert_race_existing",
+                    "tenant_id": tenant_id,
+                    "status": "open",
+                }
+
+            def create_alert(self, alert: dict) -> None:
+                raise sqlite3.IntegrityError("UNIQUE constraint failed")
+
+        service = OpsAlertsService(RaceRepository())  # type: ignore[arg-type]
+
+        result = service.create_ops_alert(
+            {
+                "ops_alert_id": "svc_call_alert_race_new",
+                "tenant_id": "tenant_a",
+                "source_event_id": "evt_call_race",
+                "alert_type": "call_failure_high_severity",
+                "status": "open",
+            }
+        )
+
+        self.assertEqual(result["result"], "deduped")
+        self.assertEqual(result["ops_alert_id"], "svc_call_alert_race_existing")
+
 
 class SpyEventPublisher:
     def __init__(self) -> None:

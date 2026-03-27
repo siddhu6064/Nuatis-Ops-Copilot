@@ -13,6 +13,7 @@ from repositories.ops_alerts_repository import OpsAlertsRepository
 
 class OpsAlertsService:
     ALLOWED_STATUSES = ("open", "resolved")
+    DEDUP_ALERT_TYPES = ("booking_failure_high_severity", "call_failure_high_severity")
     REQUIRED_CREATE_FIELDS = (
         "ops_alert_id",
         "tenant_id",
@@ -200,7 +201,7 @@ class OpsAlertsService:
         if alert_data.get("status") != "open":
             return None
 
-        if alert_data.get("alert_type") != "booking_failure_high_severity":
+        if alert_data.get("alert_type") not in self.DEDUP_ALERT_TYPES:
             return None
 
         source_event_id = alert_data.get("source_event_id")

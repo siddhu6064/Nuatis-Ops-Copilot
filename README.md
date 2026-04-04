@@ -2,6 +2,20 @@
 
 Nuatis Ops Copilot is a standalone backend service for operational intelligence.
 
+## What this repo does
+- Ingests tenant-scoped activity events and evaluates them with detectors.
+- Creates operational alerts when detector rules match, with dedup protection for open high-severity booking/call failures.
+- Exposes internal APIs to list, inspect, and resolve alerts (single and bulk).
+- Supports best-effort webhook notifications and internal event publishing for created/resolved alerts.
+- Includes a tiny operator UI (`/ui/alerts`) for basic read + single-resolve workflows.
+
+## Why it is useful
+- Gives teams a small, understandable reference backend for alerting workflows without heavy infrastructure.
+- Provides deterministic lifecycle and dedup behavior that is covered by tests and documented contracts.
+- Helps accelerate integration work by offering stable internal APIs and clear extension points
+  (detectors, notifications, internal event subscribers).
+- Enables local experimentation quickly with sqlite-backed migrations, minimal bootstrap, and a canonical test command.
+
 ## What is implemented now
 
 ### API response contract
